@@ -1,65 +1,60 @@
-import React, { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { usePDF } from 'react-to-pdf';
+interface KpiData {
+  kpiID: number
+  KPIName: string
+  dcode: number
+  DistrictName: string
+  Dept_name: string
+  segment: string
+  data_to_be_process: string
+  valuetype: number
+  KPI_Type: string
+  Numerator: number
+  Denominator: number
+  Per: number
+  weightage: number
+  scaleValue: number
+  wisi: number
+  AsOnDate: string
+}
+
+interface NewsItem {
+  id: number
+  article_category: string
+  summary_headline: string
+  district: string
+  department: string
+  summary_body: string
+}
 
 const App = () => {
-  const [state, setState] = useState([
-    {
-      "kpiID": 26,
-      "KPIName": "Applications pending more than 90 days under City Survey",
-      "dcode": 1,
-      "DistrictName": "Kachchh",
-      "Dept_name": "REVENUE",
-      "segment": "Core Revenue Activity",
-      "data_to_be_process": "As On Date",
-      "valuetype": 2,
-      "KPI_Type": "Negative",
-      "Numerator": 0,
-      "Denominator": 0,
-      "Per": 0,
-      "weightage": 1.5,
-      "scaleValue": 100,
-      "wisi": 150,
-      "AsOnDate": "15:49.2"
-    },
-    {
-      "kpiID": 27,
-      "KPIName": "Cases pending more than 6 months under Other Cases - Prant Office",
-      "dcode": 1,
-      "DistrictName": "Kachchh",
-      "Dept_name": "REVENUE",
-      "segment": "Core Revenue Activity",
-      "data_to_be_process": "Last Completed Month on 10th day",
-      "valuetype": 2,
-      "KPI_Type": "Negative",
-      "Numerator": 12,
-      "Denominator": 0,
-      "Per": 12,
-      "weightage": 1,
-      "scaleValue": 97.95,
-      "wisi": 97.95,
-      "AsOnDate": "15:48.7"
-    },
-    {
-      "kpiID": 28,
-      "KPIName": "% Applications pending out of time limit under iORA (All Channel)",
-      "dcode": 1,
-      "DistrictName": "Kachchh",
-      "Dept_name": "REVENUE",
-      "segment": "Core Revenue Activity",
-      "data_to_be_process": "As On Date",
-      "valuetype": 1,
-      "KPI_Type": "Negative",
-      "Numerator": 145,
-      "Denominator": 517,
-      "Per": 28.05,
-      "weightage": 2,
-      "scaleValue": 44.2,
-      "wisi": 88.4,
-      "AsOnDate": "15:48.4"
-    }
-  ])
+
+  const [state, setState] = useState<KpiData[]>([]);
+  const [newsresult, setNewsResult] = useState<NewsItem[]>([]);
+  const { toPDF, targetRef } = usePDF({ filename: "newsletter.pdf" });
+
+  useEffect(() => {
+    fetch("http://10.83.29.76:9017/kpi?date=2026-07-07")
+      .then((res) => res.json())
+      .then((data) => {
+        console.log(data);
+        setState(data);
+      })
+      .catch((err) => console.error(err));
+
+    fetch("http://10.83.29.76:9017/news?date=2026-07-07&limit=50&offset=0")
+      .then((res) => res.json())
+      .then((data) => {
+        console.log(data);
+        setNewsResult(data);
+      })
+      .catch((err) => console.error(err));
+  }, [])
   return (
     <>
-      <div className='w-screen h-screen flex justify-center items-center mt-[150px]'>
+      <button onClick={() => toPDF()}>Download PDF</button>
+      <div className='w-screen h-screen flex justify-center items-center mt-[150px]' ref={targetRef}>
         <div className="relative w-[1668px] h-[1123px]">
           <div
             data-pencil-name="કાર્યકારી સંક્ષેપ · પૃષ્ઠ ૦૧"
@@ -130,7 +125,7 @@ const App = () => {
             </div>
             <div
               data-pencil-name="Headline of the Day"
-              className="box-border w-full h-[140px] shrink-0 flex flex-col gap-[4px] justify-start items-start"
+              className="box-border w-full h-fit shrink-0 flex flex-col gap-[4px] justify-start items-start"
             >
               <div
                 data-pencil-name="Label"
@@ -160,7 +155,7 @@ const App = () => {
               </div>
               <div
                 data-pencil-name="Byline"
-                className="text-[10px]/[normal] box-border text-[#8A8A8A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-normal tracking-[0.1px] text-left [white-space:nowrap]"
+                className="text-[10px]/[normal] box-border text-[#8A8A8A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-normal tracking-[0.1px] text-left w-full min-w-0 break-words"
               >
                 સ્ત્રોત: નાણાં વિભાગ · ત્રૈમાસિક કાર્યક્ષમતા અહેવાલ
               </div>
@@ -193,116 +188,45 @@ const App = () => {
                 >
                   જિલ્લા માટે સમીક્ષા ના મુદ્દા
                 </div>
-                <div
-                  data-pencil-name="District બોટાદ"
-                  className="box-border w-full h-fit shrink-0 flex flex-col gap-[3px] p-[6px_0px] justify-start items-start"
-                >
+                {/* {state.slice(0, 3).map((item) => (
                   <div
-                    data-pencil-name="Top Rule"
-                    className="box-border w-full h-[0.5px] shrink-0 bg-[#DADADA]"
-                  ></div>
-                  <div
-                    data-pencil-name="Title Row"
-                    className="box-border w-fit h-fit shrink-0 flex flex-row gap-[6px] justify-start items-center"
+                    key={item.kpiID}
+                    data-pencil-name={`District ${item.DistrictName}`}
+                    className="box-border w-full h-fit shrink-0 flex flex-col gap-[3px] p-[6px_0px] justify-start items-start"
                   >
                     <div
-                      data-pencil-name="Arrow"
-                      className="text-[16px]/[normal] box-border text-[#B0271A] font-[Inter,system-ui,sans-serif] font-semibold text-left [white-space:nowrap]"
+                      data-pencil-name="Top Rule"
+                      className="box-border w-full h-[0.5px] shrink-0 bg-[#DADADA]"
+                    ></div>
+                    <div
+                      data-pencil-name="Title Row"
+                      className="box-border w-full h-fit shrink-0 flex flex-row gap-[6px] justify-start items-center"
                     >
-                      ▼
+                      <div
+                        data-pencil-name="Arrow"
+                        className="text-[16px]/[normal] box-border text-[#B0271A] font-[Inter,system-ui,sans-serif] font-semibold text-left shrink-0"
+                      >
+                        ▼
+                      </div>
+                      <div
+                        data-pencil-name="Name"
+                        className="text-[22px]/[normal] box-border text-[#2C2C2C] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold tracking-[0.2px] text-left min-w-0 break-words"
+                      >
+                        {item.DistrictName}
+                      </div>
                     </div>
                     <div
-                      data-pencil-name="Name"
-                      className="text-[22px]/[normal] box-border text-[#2C2C2C] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold tracking-[0.2px] text-left [white-space:nowrap]"
+                      data-pencil-name="Bullets"
+                      className="text-[15px]/[26px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left break-words"
                     >
-                      {state[0].DistrictName}
+                      • {item.KPIName}
+                      <br />
+                      • મૂલ્ય: {item.Per}% · વેઇટેજ: {item.weightage}
+                      <br />
+                      • WISI સ્કોર: {item.wisi}
                     </div>
                   </div>
-                  <div
-                    data-pencil-name="Bullets"
-                    className="text-[15px]/[26px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left"
-                  >
-                    • મૂડીખર્ચ 38.2%, લક્ષ્યાંક કરતાં 14.7% ઓછું
-                    <br />
-                    • 47 પ્રોજેક્ટ બાકી, 23 દિવસ વિલંબ
-                    <br />
-                    • 12 ફરિયાદો પેન્ડિંગ
-                  </div>
-                </div>
-                <div
-                  data-pencil-name="District ડાંગ"
-                  className="box-border w-full h-fit shrink-0 flex flex-col gap-[3px] p-[6px_0px] justify-start items-start"
-                >
-                  <div
-                    data-pencil-name="Top Rule"
-                    className="box-border w-full h-[0.5px] shrink-0 bg-[#DADADA]"
-                  ></div>
-                  <div
-                    data-pencil-name="Title Row"
-                    className="box-border w-fit h-fit shrink-0 flex flex-row gap-[6px] justify-start items-center"
-                  >
-                    <div
-                      data-pencil-name="Arrow"
-                      className="text-[16px]/[normal] box-border text-[#B0271A] font-[Inter,system-ui,sans-serif] font-semibold text-left [white-space:nowrap]"
-                    >
-                      ▼
-                    </div>
-                    <div
-                      data-pencil-name="Name"
-                      className="text-[22px]/[normal] box-border text-[#2C2C2C] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold tracking-[0.2px] text-left [white-space:nowrap]"
-                    >
-                      {state[1].DistrictName}
-                    </div>
-                  </div>
-                  <div
-                    data-pencil-name="Bullets"
-                    className="text-[15px]/[26px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left"
-                  >
-                    • મૂડીખર્ચ 41.7%, કૃષિ 32% ખાધ
-                    <br />
-                    • 32 પ્રોજેક્ટ બાકી, 8 ટેન્ડર રદ
-                    <br />
-                    • PM-AWAS 1,847 લાભાર્થી
-                  </div>
-                </div>
-
-
-                <div
-                  data-pencil-name="District ડાંગ"
-                  className="box-border w-full h-fit shrink-0 flex flex-col gap-[3px] p-[6px_0px] justify-start items-start"
-                >
-                  <div
-                    data-pencil-name="Top Rule"
-                    className="box-border w-full h-[0.5px] shrink-0 bg-[#DADADA]"
-                  ></div>
-                  <div
-                    data-pencil-name="Title Row"
-                    className="box-border w-fit h-fit shrink-0 flex flex-row gap-[6px] justify-start items-center"
-                  >
-                    <div
-                      data-pencil-name="Arrow"
-                      className="text-[16px]/[normal] box-border text-[#B0271A] font-[Inter,system-ui,sans-serif] font-semibold text-left [white-space:nowrap]"
-                    >
-                      ▼
-                    </div>
-                    <div
-                      data-pencil-name="Name"
-                      className="text-[22px]/[normal] box-border text-[#2C2C2C] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold tracking-[0.2px] text-left [white-space:nowrap]"
-                    >
-                      {state[1].DistrictName}
-                    </div>
-                  </div>
-                  <div
-                    data-pencil-name="Bullets"
-                    className="text-[15px]/[26px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left"
-                  >
-                    • મૂડીખર્ચ 41.7%, કૃષિ 32% ખાધ
-                    <br />
-                    • 32 પ્રોજેક્ટ બાકી, 8 ટેન્ડર રદ
-                    <br />
-                    • PM-AWAS 1,847 લાભાર્થી
-                  </div>
-                </div>
+                ))} */}
                 <div
                   data-pencil-name="Bottom Rule"
                   className="box-border w-full h-[0.5px] shrink-0 bg-[#DADADA]"
@@ -341,7 +265,7 @@ const App = () => {
                 </div>
                 <div
                   data-pencil-name="Description"
-                  className="text-[19px]/[normal] box-border text-[#2C2C2C] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-medium text-left [white-space:nowrap]"
+                  className="text-[19px]/[normal] box-border text-[#2C2C2C] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-medium text-left w-full min-w-0 break-words"
                 >
                   મૂડીખર્ચ સિદ્ધિ
                 </div>
@@ -361,19 +285,19 @@ const App = () => {
                 >
                   <div
                     data-pencil-name="M1"
-                    className="text-[13px]/[normal] box-border text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left [white-space:nowrap]"
+                    className="text-[13px]/[normal] box-border text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left min-w-0 break-words"
                   >
                     ₹18,427 કરોડ
                   </div>
                   <div
                     data-pencil-name="M2"
-                    className="text-[13px]/[normal] box-border text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left [white-space:nowrap]"
+                    className="text-[13px]/[normal] box-border text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left min-w-0 break-words"
                   >
                     412 પ્રોજેક્ટ
                   </div>
                   <div
                     data-pencil-name="M3"
-                    className="text-[13px]/[normal] box-border text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left [white-space:nowrap]"
+                    className="text-[13px]/[normal] box-border text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left min-w-0 break-words"
                   >
                     33 જિલ્લા
                   </div>
@@ -412,7 +336,7 @@ const App = () => {
               >
                 <div
                   data-pencil-name="Story AMRUT 2.0"
-                  className="box-border w-[229px] shrink-0 h-[293px] flex flex-col gap-[6px] p-[8px_0px] justify-start items-start"
+                  className="box-border w-[229px] shrink-0 h-fit flex flex-col gap-[6px] p-[8px_0px] justify-start items-start"
                 >
                   <div
                     data-pencil-name="Title"
@@ -431,7 +355,7 @@ const App = () => {
                 </div>
                 <div
                   data-pencil-name="Story મેટ્રો ફેઝ-2"
-                  className="box-border w-[229px] shrink-0 h-[293px] flex flex-col gap-[6px] p-[8px_0px] justify-start items-start"
+                  className="box-border w-[229px] shrink-0 h-fit flex flex-col gap-[6px] p-[8px_0px] justify-start items-start"
                 >
                   <div
                     data-pencil-name="Title"
@@ -449,7 +373,7 @@ const App = () => {
                 </div>
                 <div
                   data-pencil-name="Story EV ઈન્ફ્રાસ્ટ્રક્ચર"
-                  className="box-border w-[229px] shrink-0 h-[293px] flex flex-col gap-[6px] p-[8px_0px] justify-start items-start"
+                  className="box-border w-[229px] shrink-0 h-fit flex flex-col gap-[6px] p-[8px_0px] justify-start items-start"
                 >
                   <div
                     data-pencil-name="Title"
@@ -595,7 +519,7 @@ const App = () => {
                       </div>
                       <div
                         data-pencil-name="Name"
-                        className="text-[18px]/[normal] box-border text-[#2C2C2C] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold text-left [white-space:nowrap]"
+                        className="text-[18px]/[normal] box-border text-[#2C2C2C] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold text-left min-w-0 break-words"
                       >
                         શહેરી વિકાસ વિભાગ
                       </div>
@@ -629,7 +553,7 @@ const App = () => {
                       </div>
                       <div
                         data-pencil-name="Name"
-                        className="text-[18px]/[normal] box-border text-[#2C2C2C] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold text-left [white-space:nowrap]"
+                        className="text-[18px]/[normal] box-border text-[#2C2C2C] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold text-left min-w-0 break-words"
                       >
                         ઉચ્ય શિક્ષણ વિભાગ
                       </div>
@@ -719,15 +643,15 @@ const App = () => {
               </div>
               <div
                 data-pencil-name="Negative News Highlights"
-                className="box-border [flex:1_1_0] h-full relative"
+                className="box-border [flex:1_1_0] h-full flex flex-col gap-[12px] justify-start items-start"
               >
                 <div
                   data-pencil-name="NegHeader"
-                  className="box-border w-[378px] h-fit absolute left-0 top-0 flex flex-row gap-[12px] p-[0px_0px_12px_0px] justify-start items-center [z-index:0]"
+                  className="box-border w-full h-fit shrink-0 flex flex-row gap-[12px] p-[0px_0px_12px_0px] justify-start items-center"
                 >
                   <div
                     data-pencil-name="Label"
-                    className="text-[15px]/[normal] box-border text-[#B0271A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-bold tracking-[0.1px] text-left [white-space:nowrap]"
+                    className="text-[15px]/[normal] box-border text-[#B0271A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-bold tracking-[0.1px] text-left shrink-0"
                   >
                     નકારાત્મક અહેવાલ
                   </div>
@@ -737,96 +661,66 @@ const App = () => {
                   ></div>
                   <div
                     data-pencil-name="Page Tag"
-                    className="text-[11px]/[normal] box-border text-[#8A8A8A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-normal tracking-[0.1px] text-left [white-space:nowrap]"
+                    className="text-[11px]/[normal] box-border text-[#8A8A8A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-normal tracking-[0.1px] text-left shrink-0"
                   >
                     પૃષ્ઠ ૦૨ · આગળ પૃષ્ઠ ૦૩
                   </div>
                 </div>
                 <div
                   data-pencil-name="Header Rule"
-                  className="box-border w-[378px] h-[3px] absolute left-0 top-[22px] bg-[#B0271A] [z-index:1]"
+                  className="box-border w-full h-[2px] shrink-0 bg-[#B0271A]"
                 ></div>
-                <div
-                  data-pencil-name="FeatureBody"
-                  className="box-border w-[378px] h-[317.5px] absolute left-0 top-[35px] flex flex-row gap-[20px] justify-start items-start [z-index:2]"
-                >
-                  <div
-                    data-pencil-name="Lead Column"
-                    className="box-border w-[240px] shrink-0 h-full flex flex-col gap-[8px] justify-start items-start"
-                  >
-                    <div
-                      data-pencil-name="Kicker"
-                      className="text-[13px]/[normal] box-border text-[#5A5A5A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-semibold tracking-[0.1px] text-left [white-space:nowrap]"
-                    >
-                      ફિસ્કલ · ચોમાસુ · પાક વીમો
-                    </div>
-                    <div
-                      data-pencil-name="Headline"
-                      className="text-[30px]/[34px] box-border w-full text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-medium tracking-[-0.3px] text-left"
-                    >
-                      ત્રણ જિલ્લામાં 19 મહિનાથી ₹1,284 Cr પૂર-વળતર પેન્ડિંગ
-                    </div>
-                    <div
-                      data-pencil-name="Byline"
-                      className="text-[12px]/[normal] box-border text-[#8A8A8A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-normal tracking-[0.1px] text-left [white-space:nowrap]"
-                    >
-                      સંપાદકીય ડેસ્ક · ૦૩ જુલાઈ ૨૦૨૬ · ૦૬:૪૨ IST
-                    </div>
-                    <div
-                      data-pencil-name="Body"
-                      className="text-[15px]/[25px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left"
-                    >
-                      આણંદ, ખેડા અને પંચમહલ જિલ્લામાં 2.3 લાખ ખેડૂતોના પાક વીમા દાવા 19 મહિનાથી અટવાયેલા
-                      છે. 412 કિમી ગ્રામીણ માર્ગ સમારકામ હજુ બાકી.
-                    </div>
-                  </div>
-                  <div
-                    data-pencil-name="Side Column"
-                    className="box-border [flex:1_1_0] h-full flex flex-col gap-[6px] justify-start items-start"
-                  >
-                    <div
-                      data-pencil-name="Stats Frame"
-                      className="box-border w-full h-fit shrink-0 flex flex-col gap-[5px] justify-start items-start"
-                    >
+                <div className="flex flex-col gap-[16px] w-full [flex:1_1_0] overflow-hidden">
+                  {
+                    newsresult.slice(0, 2)?.map((result) => (
                       <div
-                        data-pencil-name="Stats Label"
-                        className="text-[13px]/[normal] box-border text-[#2C2C2C] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-bold tracking-[0.1px] text-left [white-space:nowrap]"
-                      >
-                        આંકડાકીય વિગત
-                      </div>
-                      <div
-                        data-pencil-name="Stats Rule"
-                        className="box-border w-[87px] h-[2px] shrink-0 bg-[#2C2C2C]"
-                      ></div>
-                      <div
-                        data-pencil-name="Stat સરેરાશ દાવો પેન્ડિંગ"
-                        className="box-border w-full h-fit shrink-0 flex flex-row gap-[6px] p-[2px_0px] justify-start items-center"
+                        key={result.id}
+                        data-pencil-name="FeatureBody"
+                        className="box-border w-full h-fit shrink-0 flex flex-row gap-[16px] justify-start items-start"
                       >
                         <div
-                          data-pencil-name="Number"
-                          className="text-[24px]/[normal] box-border text-[#B0271A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left [white-space:nowrap]"
+                          data-pencil-name="Lead Column"
+                          className="box-border [flex:1_1_0] min-w-0 h-fit flex flex-col gap-[6px] justify-start items-start"
                         >
-                          ૧૯
-                        </div>
-                        <div
-                          data-pencil-name="Unit"
-                          className="text-[10px]/[normal] box-border text-[#5A5A5A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-normal tracking-[0.6px] text-left [white-space:nowrap]"
-                        >
-                          મહિના
-                        </div>
-                        <div
-                          data-pencil-name="Label"
-                          className="text-[11px]/[14px] box-border [flex:1_1_0] text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left"
-                        >
-                          સરેરાશ પેન્ડિંગ
+                          <div
+                            data-pencil-name="Kicker"
+                            className="text-[11px]/[normal] text-[#5A5A5A]  text-left min-w-0 break-words w-full"
+                          >
+                            {result.article_category}
+                          </div>
+
+                          <div
+                            data-pencil-name="Headline"
+                            className="text-[16px]/[22px] w-full text-[#163B7A] font-extrabold text-left min-w-0 break-words"
+                          >
+                            {result.summary_headline}
+                          </div>
+
+                          <div
+                            data-pencil-name="Byline"
+                            className="text-[11px]/[normal] text-[#8A8A8A] text-left min-w-0 break-words w-full"
+                          >
+                            {result.district}
+                            {result.department !== "N/A" && ` • ${result.department}`}
+                          </div>
+
+                          <div
+                            data-pencil-name="Body"
+                            className="text-[14px]/[22px] w-full text-[#5A5A5A] text-left min-w-0 break-words"
+                          >
+                            {result.summary_body}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
+                    ))
+                  }
+                  {newsresult.length === 0 && (
+                    <div className="text-[14px]/[22px] text-[#8A8A8A] text-left">કોઈ નકારાત્મક અહેવાલ ઉપલબ્ધ નથી</div>
+                  )}
                 </div>
                 <div
                   data-pencil-name="Related Section"
-                  className="box-border w-[378px] h-[317.5px] absolute left-0 top-[352.5px] flex flex-col gap-[6px] p-[12px_0px_0px_0px] justify-start items-start [z-index:3]"
+                  className="box-border w-full h-fit shrink-0 flex flex-col gap-[6px] p-[12px_0px_0px_0px] justify-start items-start"
                 >
                   <div
                     data-pencil-name="Divider"
@@ -917,7 +811,7 @@ const App = () => {
             </div>
             <div
               data-pencil-name="Positive News Highlights"
-              className="box-border w-full h-[330px] shrink-0 flex flex-col gap-0 justify-start items-start"
+              className="box-border w-full h-fit shrink-0 flex flex-col gap-0 justify-start items-start"
             >
               <div
                 data-pencil-name="PosHeader"
