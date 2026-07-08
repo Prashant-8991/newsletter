@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { usePDF } from 'react-to-pdf';
 interface KpiData {
   kpiID: number
   KPIName: string
@@ -30,35 +29,94 @@ interface NewsItem {
 
 const App = () => {
 
-  const [state, setState] = useState<KpiData[]>([]);
-  const [newsresult, setNewsResult] = useState<NewsItem[]>([]);
-  const { toPDF, targetRef } = usePDF({ filename: "newsletter.pdf" });
+  const [state, setState] = useState<KpiData[]>(() => {
+    const injected = (window as unknown as { __injectedKpiData?: unknown }).__injectedKpiData
+    return Array.isArray(injected) ? (injected as KpiData[]) : []
+  });
+  const [newsresult, setNewsResult] = useState<NewsItem[]>(() => {
+    const injected = (window as unknown as { __injectedNewsData?: unknown }).__injectedNewsData
+    return Array.isArray(injected) ? (injected as NewsItem[]) : []
+  });
 
   useEffect(() => {
-    fetch("http://10.83.29.76:9017/kpi?date=2026-07-07")
-      .then((res) => res.json())
-      .then((data) => {
-        console.log(data);
-        setState(data);
-      })
-      .catch((err) => console.error(err));
+    const w = window as unknown as {
+      __injectedKpiData?: unknown
+      __injectedNewsData?: unknown
+      __kpiLoaded?: boolean
+      __newsLoaded?: boolean
+    }
 
-    fetch("http://10.83.29.76:9017/news?date=2026-07-07&limit=50&offset=0")
-      .then((res) => res.json())
-      .then((data) => {
-        console.log(data);
-        setNewsResult(data);
-      })
-      .catch((err) => console.error(err));
+    if (Array.isArray(w.__injectedKpiData)) {
+      w.__kpiLoaded = true
+    } else {
+      fetch("http://10.83.29.76:9017/kpi?date=2026-07-07")
+        .then((res) => res.json())
+        .then((data) => {
+          console.log("KPI data:", data);
+          setState(Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : []);
+          w.__kpiLoaded = true;
+        })
+        .catch((err) => {
+          console.error("KPI fetch error:", err);
+          w.__kpiLoaded = true;
+        });
+    }
+
+    if (Array.isArray(w.__injectedNewsData)) {
+      w.__newsLoaded = true
+    } else {
+      fetch(import.meta.env.VITE_NEWS_API)
+        .then((res) => res.json())
+        .then((data) => {
+          console.log("News data:", data);
+          setNewsResult(Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : []);
+          w.__newsLoaded = true;
+        })
+        .catch((err) => {
+          console.error("News fetch error:", err);
+          w.__newsLoaded = true;
+        });
+    }
   }, [])
   return (
     <>
-      <button onClick={() => toPDF()}>Download PDF</button>
-      <div className='w-screen h-screen flex justify-center items-center mt-[150px]' ref={targetRef}>
-        <div className="relative w-[1668px] h-[1123px]">
+      <button
+        onClick={async () => {
+          const btn = document.getElementById('export-pdf-btn') as HTMLButtonElement | null
+          if (btn) { btn.disabled = true; btn.textContent = 'PDF બનાવી રહ્યા છીએ…' }
+          try {
+            const res = await fetch('/api/pdf', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ kpiData: state, newsData: newsresult }),
+            })
+            if (!res.ok) throw new Error(await res.text())
+            const blob = await res.blob()
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = 'newsletter.pdf'
+            document.body.appendChild(a)
+            a.click()
+            a.remove()
+            URL.revokeObjectURL(url)
+          } catch (err) {
+            alert(`PDF generation failed: ${(err as Error).message}`)
+          } finally {
+            if (btn) { btn.disabled = false; btn.textContent = 'PDF ડાઉનલોડ કરો' }
+          }
+        }}
+        id="export-pdf-btn"
+        className="print:hidden fixed top-4 right-4 z-50 px-5 py-2.5 bg-[#163B7A] text-white font-['Noto_Sans_Gujarati',system-ui,sans-serif] text-sm font-semibold rounded shadow-lg hover:bg-[#0f2d5e] transition-colors cursor-pointer border-none disabled:opacity-60 disabled:cursor-not-allowed"
+      >
+        PDF ડાઉનલોડ કરો
+      </button>
+      <button className='print:hidden py-2.5 bg-[#163B7A] text-white px-2.5 rounded-md fixed top-4 left-3' onClick={() => { window.location.reload() }}>Refresh</button>
+      <div id="newsletter-content" className='w-screen h-screen flex justify-center items-center mt-[150px]'>
+        <div className="print-wrapper relative w-[1668px] h-[1123px]">
           <div
             data-pencil-name="કાર્યકારી સંક્ષેપ · પૃષ્ઠ ૦૧"
-            className="box-border w-[794px] h-[1123px] absolute left-0 top-0 flex flex-col gap-[3px] p-[30px] justify-start items-start bg-[#FBF9F4] overflow-hidden"
+            className="print-page box-border w-[794px] h-[1123px] absolute left-0 top-0 flex flex-col gap-[3px] p-[30px] justify-start items-start bg-[#FBF9F4] overflow-hidden"
           >
             <div
               data-pencil-name="Masthead"
@@ -188,7 +246,7 @@ const App = () => {
                 >
                   જિલ્લા માટે સમીક્ષા ના મુદ્દા
                 </div>
-                {/* {state.slice(0, 3).map((item) => (
+                {state.slice(0, 3).map((item) => (
                   <div
                     key={item.kpiID}
                     data-pencil-name={`District ${item.DistrictName}`}
@@ -226,7 +284,8 @@ const App = () => {
                       • WISI સ્કોર: {item.wisi}
                     </div>
                   </div>
-                ))} */}
+                ))}
+
                 <div
                   data-pencil-name="Bottom Rule"
                   className="box-border w-full h-[0.5px] shrink-0 bg-[#DADADA]"
@@ -428,7 +487,7 @@ const App = () => {
           </div>
           <div
             data-pencil-name="કાર્યકારી સંક્ષેપ · પૃષ્ઠ ૦૨"
-            className="box-border w-[794px] h-[1123px] absolute left-[874px] top-0 flex flex-col gap-[3px] p-[30px] justify-start items-start bg-[#FBF9F4] overflow-hidden"
+            className="print-page box-border w-[794px] h-[1123px] absolute left-[874px] top-0 flex flex-col gap-[3px] p-[30px] justify-start items-start bg-[#FBF9F4] overflow-hidden"
           >
             <div
               data-pencil-name="Continuation Header"
@@ -672,7 +731,7 @@ const App = () => {
                 ></div>
                 <div className="flex flex-col gap-[16px] w-full [flex:1_1_0] overflow-hidden">
                   {
-                    newsresult.slice(0, 2)?.map((result) => (
+                    newsresult.slice(0, 3)?.map((result) => (
                       <div
                         key={result.id}
                         data-pencil-name="FeatureBody"
@@ -682,12 +741,12 @@ const App = () => {
                           data-pencil-name="Lead Column"
                           className="box-border [flex:1_1_0] min-w-0 h-fit flex flex-col gap-[6px] justify-start items-start"
                         >
-                          <div
+                          {/* <div
                             data-pencil-name="Kicker"
                             className="text-[11px]/[normal] text-[#5A5A5A]  text-left min-w-0 break-words w-full"
                           >
                             {result.article_category}
-                          </div>
+                          </div> */}
 
                           <div
                             data-pencil-name="Headline"
@@ -701,7 +760,7 @@ const App = () => {
                             className="text-[11px]/[normal] text-[#8A8A8A] text-left min-w-0 break-words w-full"
                           >
                             {result.district}
-                            {result.department !== "N/A" && ` • ${result.department}`}
+                            {result.department !== "N/A"}
                           </div>
 
                           <div
