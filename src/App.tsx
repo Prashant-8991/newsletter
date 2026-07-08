@@ -27,33 +27,62 @@ interface NewsItem {
   summary_body: string
 }
 
+interface AlertItem {
+  id: string;
+  conveyed_date: string;
+  days_taken: number;
+  current_state_value: number;
+  department_name: string;
+  name_of_alert: string;
+  alert_statement: string;
+  alert_statement_gujarati: string;
+  created_at: string;
+}
+
 const App = () => {
 
   const [state, setState] = useState<KpiData[]>(() => {
-    const injected = (window as unknown as { __injectedKpiData?: unknown }).__injectedKpiData
-    return Array.isArray(injected) ? (injected as KpiData[]) : []
+    const injected = (window as { __injectedKpiData?: unknown }).__injectedKpiData;
+    return Array.isArray(injected) ? (injected as KpiData[]) : [];
   });
+
   const [newsresult, setNewsResult] = useState<NewsItem[]>(() => {
-    const injected = (window as unknown as { __injectedNewsData?: unknown }).__injectedNewsData
-    return Array.isArray(injected) ? (injected as NewsItem[]) : []
+    const injected = (window as { __injectedNewsData?: unknown }).__injectedNewsData;
+    return Array.isArray(injected) ? (injected as NewsItem[]) : [];
+  });
+
+  const [alertresult, setAlertResult] = useState<AlertItem[]>(() => {
+    const injected = (window as { __injectedAlertData?: unknown }).__injectedAlertData;
+    return Array.isArray(injected) ? (injected as AlertItem[]) : [];
   });
 
   useEffect(() => {
-    const w = window as unknown as {
-      __injectedKpiData?: unknown
-      __injectedNewsData?: unknown
-      __kpiLoaded?: boolean
-      __newsLoaded?: boolean
-    }
+    const w = window as {
+      __injectedKpiData?: unknown;
+      __injectedNewsData?: unknown;
+      __injectedAlertData?: unknown;
+      __kpiLoaded?: boolean;
+      __newsLoaded?: boolean;
+      __alertLoaded?: boolean;
+    };
 
+    // KPI
     if (Array.isArray(w.__injectedKpiData)) {
-      w.__kpiLoaded = true
+      w.__kpiLoaded = true;
     } else {
-      fetch("http://10.83.29.76:9017/kpi?date=2026-07-07")
+      fetch("http://10.83.29.76:9017/kpi?date=2026-07-08")
         .then((res) => res.json())
         .then((data) => {
           console.log("KPI data:", data);
-          setState(Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : []);
+
+          setState(
+            Array.isArray(data)
+              ? data
+              : Array.isArray(data?.data)
+                ? data.data
+                : []
+          );
+
           w.__kpiLoaded = true;
         })
         .catch((err) => {
@@ -62,14 +91,26 @@ const App = () => {
         });
     }
 
+    const today = new Intl.DateTimeFormat("sv-SE").format(new Date());
+
+    // News
     if (Array.isArray(w.__injectedNewsData)) {
-      w.__newsLoaded = true
+      w.__newsLoaded = true;
     } else {
-      fetch(import.meta.env.VITE_NEWS_API)
+      fetch(
+        `https://swar-api.gujarat.gov.in/newsletter-api/news?date=${today}&limit=50&offset=0`
+      )
         .then((res) => res.json())
         .then((data) => {
           console.log("News data:", data);
-          setNewsResult(Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : []);
+
+          const news = Array.isArray(data)
+            ? data
+            : Array.isArray(data?.data)
+              ? data.data
+              : [];
+
+          setNewsResult(news);
           w.__newsLoaded = true;
         })
         .catch((err) => {
@@ -77,7 +118,35 @@ const App = () => {
           w.__newsLoaded = true;
         });
     }
-  }, [])
+
+    // Alerts
+    if (Array.isArray(w.__injectedAlertData)) {
+      w.__alertLoaded = true;
+    } else {
+      fetch(
+        `https://swar-api.gujarat.gov.in/newsletter-api/alerts?date=${today}&limit=50&offset=0`
+      )
+        .then((res) => res.json())
+        .then((data) => {
+          console.log("Alert data:", data);
+
+          const alerts = Array.isArray(data)
+            ? data
+            : Array.isArray(data?.data)
+              ? data.data
+              : [];
+
+          setAlertResult(alerts);
+          w.__alertLoaded = true;
+
+          console.log("Alerts:", alerts);
+        })
+        .catch((err) => {
+          console.error("Alert fetch error:", err);
+          w.__alertLoaded = true;
+        });
+    }
+  }, []);
   return (
     <>
       <button
@@ -551,81 +620,61 @@ const App = () => {
                     >
                       લક્ષ્યાંકથી નીચેના વિભાગો
                     </div>
-                    <div
+                    {/* <div
                       data-pencil-name="Subtitle"
                       className="text-[14px]/[21px] box-border text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left [white-space:nowrap]"
                     >
                       Q1 FY ૨૦૨૬-૨૭ · ૨૨ વિભાગોમાંથી ૮ ધ્યાન આપવાલાયક
-                    </div>
+                    </div> */}
                   </div>
-                  <div
-                    data-pencil-name="Dept શહેરી વિકાસ વિભાગ"
-                    className="box-border w-full h-fit shrink-0 flex flex-col gap-[1px] p-[3px_0px] justify-start items-start"
-                  >
-                    <div
-                      data-pencil-name="Top Rule"
-                      className="box-border w-full h-[0.5px] shrink-0 bg-[#DADADA]"
-                    ></div>
-                    <div
-                      data-pencil-name="Title Row"
-                      className="box-border w-fit h-fit shrink-0 flex flex-row gap-[8px] justify-start items-center"
-                    >
-                      <div
-                        data-pencil-name="Arrow"
-                        className="text-[17px]/[normal] box-border text-[#B0271A] font-[Inter,system-ui,sans-serif] font-semibold text-left [white-space:nowrap]"
-                      >
-                        ▼
-                      </div>
-                      <div
-                        data-pencil-name="Name"
-                        className="text-[18px]/[normal] box-border text-[#2C2C2C] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold text-left min-w-0 break-words"
-                      >
-                        શહેરી વિકાસ વિભાગ
-                      </div>
-                    </div>
-                    <div
-                      data-pencil-name="Bullets"
-                      className="text-[16px]/[25px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left"
-                    >
-                      • મૂડીખર્ચ 41.2%; 84 ટેન્ડર બાકી
-                      <br />
-                      • સ્માર્ટ સિટીમાં 31 દિવસ વિલંબ
-                    </div>
-                  </div>
-                  <div
-                    data-pencil-name="Dept ઉચ્ય શિક્ષણ વિભાગ"
-                    className="box-border w-full h-fit shrink-0 flex flex-col gap-[1px] p-[3px_0px] justify-start items-start"
-                  >
-                    <div
-                      data-pencil-name="Top Rule"
-                      className="box-border w-full h-[0.5px] shrink-0 bg-[#DADADA]"
-                    ></div>
-                    <div
-                      data-pencil-name="Title Row"
-                      className="box-border w-fit h-fit shrink-0 flex flex-row gap-[8px] justify-start items-center"
-                    >
-                      <div
-                        data-pencil-name="Arrow"
-                        className="text-[17px]/[normal] box-border text-[#B0271A] font-[Inter,system-ui,sans-serif] font-semibold text-left [white-space:nowrap]"
-                      >
-                        ▼
-                      </div>
-                      <div
-                        data-pencil-name="Name"
-                        className="text-[18px]/[normal] box-border text-[#2C2C2C] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold text-left min-w-0 break-words"
-                      >
-                        ઉચ્ય શિક્ષણ વિભાગ
-                      </div>
-                    </div>
-                    <div
-                      data-pencil-name="Bullets"
-                      className="text-[16px]/[25px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left"
-                    >
-                      • મૂડીખર્ચ 47.8%; ₹126 Cr પેન્ડિંગ
-                      <br />
-                      • 18 યુનિવર્સિટીમાં 22 દિવસ વિલંબ
-                    </div>
-                  </div>
+
+
+
+
+                  {/* alerts here */}
+
+                  {
+                    alertresult && alertresult.map((result) => (
+                      <>
+                        <div
+                          data-pencil-name="Dept શહેરી વિકાસ વિભાગ"
+                          className="box-border w-full h-fit shrink-0 flex flex-col gap-[1px] p-[3px_0px] justify-start items-start"
+                        >
+                          <div
+                            data-pencil-name="Top Rule"
+                            className="box-border w-full h-[0.5px] shrink-0 bg-[#DADADA]"
+                          ></div>
+                          <div
+                            data-pencil-name="Title Row"
+                            className="box-border w-fit h-fit shrink-0 flex flex-row gap-[8px] justify-start items-center"
+                          >
+                            <div
+                              data-pencil-name="Arrow"
+                              className="text-[17px]/[normal] box-border text-[#B0271A] font-[Inter,system-ui,sans-serif] font-semibold text-left [white-space:nowrap]"
+                            >
+                              ▼
+                            </div>
+                            <div
+                              data-pencil-name="Name"
+                              className="text-[18px]/[normal] box-border text-[#2C2C2C] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold text-left min-w-0 break-words"
+                            >
+                              {result.department_name}
+                            </div>
+                          </div>
+                          <div
+                            data-pencil-name="Bullets"
+                            className="text-[16px]/[25px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left"
+                          >
+                            • {result.alert_statement_gujarati}
+                          </div>
+                        </div>
+                      </>
+                    ))
+                  }
+
+
+                  {/* alerts end here */}
+
                   <div
                     data-pencil-name="WPDepts Bottom Rule"
                     className="box-border w-full h-[0.5px] shrink-0 bg-[#DADADA]"
