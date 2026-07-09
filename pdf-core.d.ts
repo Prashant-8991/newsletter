@@ -3,6 +3,8 @@ import type { Buffer } from 'node:buffer'
 export interface PdfPayload {
   kpiData?: unknown
   newsData?: unknown
+  rtpmsData?: unknown
+  edits?: Record<string, string>
 }
 
 export interface GeneratePdfOptions {

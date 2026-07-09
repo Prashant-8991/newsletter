@@ -29,17 +29,20 @@ export async function generatePdf({ baseUrl, payload = {} }) {
     const injectedKpi = JSON.stringify(payload.kpiData ?? null)
     const injectedNews = JSON.stringify(payload.newsData ?? null)
     const injectedRtpms = JSON.stringify(payload.rtpmsData ?? null)
+    const injectedEdits = JSON.stringify(payload.edits ?? {})
 
     await page.addInitScript(
-      ({ kpiData, newsData, rtpmsData }) => {
+      ({ kpiData, newsData, rtpmsData, edits }) => {
         window.__injectedKpiData = JSON.parse(kpiData)
         window.__injectedNewsData = JSON.parse(newsData)
         window.__injectedRtpmsData = JSON.parse(rtpmsData)
+        window.__injectedEdits = JSON.parse(edits)
         window.__kpiLoaded = true
         window.__newsLoaded = true
         window.__rtpmsLoaded = true
+        window.__editsLoaded = true
       },
-      { kpiData: injectedKpi, newsData: injectedNews, rtpmsData: injectedRtpms }
+      { kpiData: injectedKpi, newsData: injectedNews, rtpmsData: injectedRtpms, edits: injectedEdits }
     )
 
     await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 60000 })
@@ -58,6 +61,21 @@ export async function generatePdf({ baseUrl, payload = {} }) {
 
     await page.waitForTimeout(800)
     await page.emulateMedia({ media: 'print' })
+
+    // Replace the newsletter content with the serialized HTML from the client.
+    // This is the MOST RELIABLE way to get the user's edits into the PDF:
+    // we take the actual DOM (which the user has been editing) and inject
+    // it directly into the Playwright browser, bypassing React entirely.
+    if (payload.contentHTML && typeof payload.contentHTML === 'string') {
+      await page.evaluate((html) => {
+        const root = document.getElementById('newsletter-content')
+        if (root) {
+          root.innerHTML = html
+        }
+      }, payload.contentHTML)
+      // Wait for the DOM to settle after the replacement
+      await page.waitForTimeout(300)
+    }
 
     const pdf = await page.pdf({
       format: 'A4',

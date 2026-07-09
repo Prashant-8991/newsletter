@@ -63,6 +63,27 @@ interface RtPmsInterface {
   created_at: string;
 }
 
+interface BudgetDataInterface {
+  id: string;
+  source: string;
+  total_grant: number;
+  prabhag_name: string;
+  total_budget: number;
+  department_eng: string;
+  grant_percentage: number;
+  budget_percentage: number;
+  total_expenditure: number;
+}
+
+interface BudgetResponseInterface {
+  id: number;
+  source_id: string;
+  prabhag_name: string;
+  department_eng: string;
+  data: BudgetDataInterface;
+  created_at: string;
+}
+
 const App = () => {
 
   const [state, setState] = useState<KpiData[]>(() => {
@@ -84,6 +105,159 @@ const App = () => {
     const injected = (window as { __injectedRtpmsData?: unknown }).__injectedRtpmsData;
     return Array.isArray(injected) ? (injected as RtPmsInterface[]) : [];
   });
+
+  const [budgetresult, setbudgetResult] = useState<BudgetResponseInterface[]>(() => {
+    const injected = (window as { __injectedRtpmsData?: unknown }).__injectedRtpmsData;
+    return Array.isArray(injected) ? (injected as BudgetResponseInterface[]) : [];
+  });
+
+  const today = useMemo(
+    () => new Intl.DateTimeFormat('sv-SE').format(new Date()),
+    []
+  );
+
+  // const today = "2026-07-08"
+
+  const [edits, setEdits] = useState<Record<string, string>>(() => {
+    const injected = (window as { __injectedEdits?: unknown }).__injectedEdits;
+    if (injected && typeof injected === 'object') {
+      const out: Record<string, string> = {};
+      for (const [k, v] of Object.entries(injected as Record<string, unknown>)) {
+        if (typeof v === 'string') out[k] = v;
+      }
+      return out;
+    }
+    return {};
+  });
+
+  useEffect(() => {
+    if (Object.keys(edits).length > 0) return;
+    fetch(`/api/edits?date=${today}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data && data.edits && typeof data.edits === 'object') {
+          setEdits(data.edits as Record<string, string>);
+        }
+      })
+      .catch(() => { });
+  }, [today, edits]);
+
+  const handleSaveEdits = async () => {
+    try {
+      await fetch('/api/edits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: today, edits }),
+      });
+    } catch (err) {
+      console.error('Save edits error:', err);
+    }
+  };
+
+  const handleResetEdits = async () => {
+    setEdits({});
+    try {
+      await fetch('/api/edits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: today, edits: {} }),
+      });
+    } catch (err) {
+      console.error('Reset edits error:', err);
+    }
+  };
+
+  // Generate a unique edit key for an element.
+  // Priority: explicit data-edit-key > data-pencil-name path + sibling index.
+  const getEditKey = (el: HTMLElement): string | null => {
+    const explicit = el.getAttribute('data-edit-key')
+    if (explicit) return explicit
+
+    // Walk up to find the nearest data-pencil-name ancestor (the element itself counts)
+    const name = el.getAttribute('data-pencil-name')
+    if (!name) return null
+
+    // Build a path: parent data-pencil-name / own name[#index]
+    const parts: string[] = [name]
+    let cur: HTMLElement | null = el.parentElement
+    while (cur && cur.id !== 'newsletter-content') {
+      const pName = cur.getAttribute('data-pencil-name')
+      if (pName) parts.unshift(pName)
+      cur = cur.parentElement
+    }
+    // Disambiguate same-name siblings
+    const parent = el.parentElement
+    if (parent) {
+      const sameName = Array.from(parent.children).filter(
+        (c) => (c as HTMLElement).getAttribute('data-pencil-name') === name
+      )
+      if (sameName.length > 1) {
+        const idx = sameName.indexOf(el)
+        parts[parts.length - 1] = `${name}#${idx}`
+      }
+    }
+    return parts.join(' > ')
+  };
+
+  // Check if an element is a leaf text element (editable as a whole)
+  const isLeafTextElement = (el: HTMLElement): boolean => {
+    // Has no children with data-pencil-name or data-edit-key
+    for (const child of Array.from(el.children)) {
+      if (
+        (child as HTMLElement).hasAttribute('data-pencil-name') ||
+        (child as HTMLElement).hasAttribute('data-edit-key')
+      ) {
+        return false
+      }
+    }
+    // Has some direct text content
+    return (el.textContent || '').trim().length > 0
+  };
+
+  // Container-level blur handler: find the edited element and save
+  const handleContainerBlur = (e: React.FocusEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement
+    if (!target || target === e.currentTarget) return
+    // Find the nearest leaf element with a data-pencil-name or data-edit-key
+    let el: HTMLElement | null = target
+    while (el && el !== e.currentTarget) {
+      if (el.hasAttribute('data-edit-key') || el.hasAttribute('data-pencil-name')) {
+        if (!isLeafTextElement(el)) break
+        const key = getEditKey(el)
+        if (!key) break
+        const newText = (el.textContent || '').trim()
+        setEdits((prev) => {
+          if (newText === '') {
+            if (!(key in prev)) return prev
+            const next = { ...prev }
+            delete next[key]
+            return next
+          }
+          if (prev[key] === newText) return prev
+          return { ...prev, [key]: newText }
+        })
+        break
+      }
+      el = el.parentElement
+    }
+  };
+
+  // Sync edits state -> DOM textContent
+  useEffect(() => {
+    const root = document.getElementById('newsletter-content')
+    if (!root) return
+    const elements = root.querySelectorAll<HTMLElement>('[data-pencil-name], [data-edit-key]')
+    elements.forEach((el) => {
+      if (document.activeElement === el) return // don't overwrite while user is editing
+      if (!isLeafTextElement(el)) return
+      const key = getEditKey(el)
+      if (!key) return
+      const edited = edits[key]
+      if (edited !== undefined && (el.textContent || '').trim() !== edited) {
+        el.textContent = edited
+      }
+    })
+  }, [edits]);
 
   const positive_news = newsresult.filter((value) => value.news_type == 'positive');
   const focus_district = newsresult.filter((value) => value.news_type == 'focused district')
@@ -125,8 +299,6 @@ const App = () => {
           w.__kpiLoaded = true;
         });
     }
-
-    const today = new Intl.DateTimeFormat("sv-SE").format(new Date());
 
     // News
     if (Array.isArray(w.__injectedNewsData)) {
@@ -208,6 +380,34 @@ const App = () => {
           w.__rtpmsLoaded = true;
         });
     }
+
+
+
+    // rtpms
+    if (Array.isArray(w.__injectedRtpmsData)) {
+      w.__rtpmsLoaded = true;
+    } else {
+      fetch(
+        `https://swar-api.gujarat.gov.in/newsletter-api/budget?date=${today}&limit=50&offset=0`
+      )
+        .then((res) => res.json())
+        .then((data) => {
+          console.log("budget data:", data);
+
+          const budget = Array.isArray(data)
+            ? data
+            : Array.isArray(data?.data)
+              ? data.data
+              : [];
+
+          setbudgetResult(budget);
+          w.__rtpmsLoaded = true;
+        })
+        .catch((err) => {
+          console.error("rtpms fetch error:", err);
+          w.__rtpmsLoaded = true;
+        });
+    }
   }, []);
 
   const groupedRtpms = useMemo(() => {
@@ -237,11 +437,21 @@ const App = () => {
           const btn = document.getElementById('export-pdf-btn') as HTMLButtonElement | null
           if (btn) { btn.disabled = true; btn.textContent = 'PDF બનાવી રહ્યા છીએ…' }
           try {
-            const res = await fetch('https://swar-api.gujarat.gov.in/newsletter-pdf/api/pdf', {
-            // const res = await fetch('/api/pdf', {
+            await handleSaveEdits()
+            // Serialize the current DOM which already contains the user's edits
+            const root = document.getElementById('newsletter-content')
+            const contentHTML = root ? root.innerHTML : ''
+            const res = await fetch('/api/pdf', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ kpiData: state, newsData: newsresult, rtpmsData: rtpmsresult }),
+              body: JSON.stringify({
+                kpiData: state,
+                newsData: newsresult,
+                rtpmsData: rtpmsresult,
+                edits,
+                contentHTML,
+                date: today,
+              }),
             })
             if (!res.ok) throw new Error(await res.text())
             const blob = await res.blob()
@@ -264,8 +474,53 @@ const App = () => {
       >
         PDF ડાઉનલોડ કરો
       </button>
-      <button className='print:hidden py-2.5 bg-[#163B7A] text-white px-2.5 rounded-md fixed top-4 left-3' onClick={() => { window.location.reload() }}>Refresh</button>
-      <div id="newsletter-content" className='w-screen h-screen flex justify-center items-center mt-[150px]'>
+      <div className='print:hidden fixed top-4 left-3 z-50 flex gap-2'>
+        <button className='py-2.5 bg-[#163B7A] text-white px-2.5 rounded-md' onClick={() => { window.location.reload() }}>Refresh</button>
+        <button
+          id='save-edits-btn'
+          className='py-2.5 bg-[#2E7D32] text-white px-2.5 rounded-md disabled:opacity-60'
+          onClick={async () => {
+            const btn = document.getElementById('save-edits-btn') as HTMLButtonElement | null
+            if (btn) { btn.disabled = true; btn.textContent = 'સેવ થઈ રહ્યું છે…' }
+            try {
+              await handleSaveEdits()
+              if (btn) btn.textContent = 'સેવ થઈ ગયું ✓'
+            } catch (err) {
+              console.error(err)
+              if (btn) btn.textContent = 'ભૂલ થઈ'
+            } finally {
+              setTimeout(() => {
+                if (btn) { btn.disabled = false; btn.textContent = 'Save Edits' }
+              }, 1500)
+            }
+          }}
+        >
+          Save Edits
+        </button>
+        <button
+          id='reset-edits-btn'
+          className='py-2.5 bg-[#B0271A] text-white px-2.5 rounded-md'
+          onClick={handleResetEdits}
+        >
+          Reset
+        </button>
+        <span className='py-2.5 px-2 text-xs text-[#5A5A5A] self-center'>
+          {Object.keys(edits).length} ફેરફાર
+        </span>
+      </div>
+      <div
+        id="newsletter-content"
+        contentEditable
+        suppressContentEditableWarning
+        onBlur={handleContainerBlur}
+        onKeyDown={(e) => {
+          // Prevent formatting shortcuts
+          if ((e.ctrlKey || e.metaKey) && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {
+            e.preventDefault()
+          }
+        }}
+        className='w-screen h-screen flex justify-center items-center mt-[150px] outline-none'
+      >
         <div className="print-wrapper relative w-[1668px] h-[1123px]">
           <div
             data-pencil-name="કાર્યકારી સંક્ષેપ · પૃષ્ઠ ૦૧"
@@ -392,46 +647,57 @@ const App = () => {
                 >
                   જિલ્લા માટે સમીક્ષા ના મુદ્દા
                 </div>
-                {groupedRtpms.map((group) => (
-                  <div
-                    key={group.district}
-                    data-pencil-name={`District ${group.district}`}
-                    className="box-border w-full h-fit shrink-0 flex flex-col gap-[3px] p-[6px_0px] justify-start items-start"
-                  >
+                {groupedRtpms.map((group) => {
+                  const districtKey = `district-${group.district}`
+                  return (
                     <div
-                      data-pencil-name="Top Rule"
-                      className="box-border w-full h-[0.5px] shrink-0 bg-[#DADADA]"
-                    ></div>
-                    <div
-                      data-pencil-name="Title Row"
-                      className="box-border w-full h-fit shrink-0 flex flex-row gap-[6px] justify-start items-center"
+                      key={group.district}
+                      data-pencil-name={`District ${group.district}`}
+                      className="box-border w-full h-fit shrink-0 flex flex-col gap-[3px] p-[6px_0px] justify-start items-start"
                     >
                       <div
-                        data-pencil-name="Arrow"
-                        className="text-[16px]/[normal] box-border text-[#B0271A] font-[Inter,system-ui,sans-serif] font-semibold text-left shrink-0"
+                        data-pencil-name="Top Rule"
+                        className="box-border w-full h-[0.5px] shrink-0 bg-[#DADADA]"
+                      ></div>
+                      <div
+                        data-pencil-name="Title Row"
+                        className="box-border w-full h-fit shrink-0 flex flex-row gap-[6px] justify-start items-center"
                       >
-                        ▼
+                        <div
+                          data-pencil-name="Arrow"
+                          className="text-[16px]/[normal] box-border text-[#B0271A] font-[Inter,system-ui,sans-serif] font-semibold text-left shrink-0"
+                        >
+                          ▼
+                        </div>
+                        <div
+                          data-pencil-name="Name"
+                          data-edit-key={districtKey}
+                          className="text-[22px]/[normal] box-border text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold tracking-[0.2px] text-left min-w-0 break-words"
+                        >
+                          {group.district}
+                        </div>
                       </div>
                       <div
-                        data-pencil-name="Name"
-                        className="text-[22px]/[normal] box-border text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold tracking-[0.2px] text-left min-w-0 break-words"
+                        data-pencil-name="Bullets"
+                        className="text-[15px]/[26px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left break-words"
                       >
-                        {group.district}
+                        {group.template_filled.map((tf, idx) => {
+                          const bulletKey = `tf-${group.district}-${idx}`
+                          return (
+                            <div
+                              key={idx}
+                              data-pencil-name="Bullet"
+                              data-edit-key={bulletKey}
+                              className="break-words"
+                            >
+                              • {tf}
+                            </div>
+                          )
+                        })}
                       </div>
                     </div>
-                    <div
-                      data-pencil-name="Bullets"
-                      className="text-[15px]/[26px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left break-words"
-                    >
-                      {group.template_filled.map((tf, idx) => (
-                        <span key={idx}>
-                          • {tf}
-                          {idx < group.template_filled.length - 1 && <br />}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
 
                 <div
                   data-pencil-name="Bottom Rule"
@@ -452,7 +718,7 @@ const App = () => {
                   data-pencil-name="Rule"
                   className="box-border w-[129px] h-[2px] shrink-0 bg-[#E67E22]"
                 ></div>
-                {/* <div
+                <div
                   data-pencil-name="KPI Row"
                   className="box-border w-full h-fit shrink-0 flex flex-row gap-[5px] justify-start items-start"
                 >
@@ -468,19 +734,19 @@ const App = () => {
                   >
                     ▲
                   </div>
-                </div> */}
-                {/* <div
+                </div>
+                <div
                   data-pencil-name="Description"
                   className="text-[19px]/[normal] box-border text-[#2C2C2C] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-medium text-left w-full min-w-0 break-words"
                 >
                   મૂડીખર્ચ સિદ્ધિ
-                </div> */}
-                {/* <div
+                </div>
+                <div
                   data-pencil-name="Comparison"
                   className="text-[16px]/[normal] box-border text-[#8A8A8A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left [white-space:nowrap]"
                 >
                   લક્ષ્યાંક 87.4% સામે · Q1 FY 2026-27
-                </div> */}
+                </div>
                 <div
                   data-pencil-name="Divider"
                   className="box-border w-full h-[1px] shrink-0 bg-[#DADADA]"
@@ -489,31 +755,31 @@ const App = () => {
                   data-pencil-name="Micro Row"
                   className="box-border w-full h-fit shrink-0 flex flex-row gap-[8px] p-[6px_0px_0px_0px] justify-between items-start"
                 >
-                  {/* <div
+                  <div
                     data-pencil-name="M1"
                     className="text-[13px]/[normal] box-border text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left min-w-0 break-words"
                   >
                     ₹18,427 કરોડ
-                  </div> */}
-                  {/* <div
+                  </div>
+                  <div
                     data-pencil-name="M2"
                     className="text-[13px]/[normal] box-border text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left min-w-0 break-words"
                   >
                     412 પ્રોજેક્ટ
-                  </div> */}
-                  {/* <div
+                  </div>
+                  <div
                     data-pencil-name="M3"
                     className="text-[13px]/[normal] box-border text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left min-w-0 break-words"
                   >
                     33 જિલ્લા
-                  </div> */}
+                  </div>
                 </div>
-                {/* <div
+                <div
                   data-pencil-name="Caption"
                   className="text-[10px]/[normal] box-border text-[#8A8A8A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-normal tracking-[0.1px] text-left [white-space:nowrap]"
                 >
                   સ્ત્રોત: નાણાં વિભાગ
-                </div> */}
+                </div>
               </div>
             </div>
             <div
@@ -549,13 +815,15 @@ const App = () => {
                       >
                         <div
                           data-pencil-name="Title"
-                          className="text-[20px]/[normal] box-border text-[#E67E22] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold text-left [white-space:nowrap]"
+                          data-edit-key={`fd-title-${result.id}`}
+                          className="text-[20px]/[normal] box-border text-[#E67E22] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold text-left break-words"
                         >
                           ▸ {result.summary_headline}
                         </div>
                         <div
                           data-pencil-name="Body"
-                          className="text-[14px]/[22px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left"
+                          data-edit-key={`fd-body-${result.id}`}
+                          className="text-[14px]/[22px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left break-words"
                         >
                           {result.summary_body}
                         </div>
@@ -732,12 +1000,13 @@ const App = () => {
                           >
                             <div
                               data-pencil-name="Arrow"
-                              className="text-[17px]/[normal] box-border text-[#B0271A] font-[Inter,system-ui,sans-serif] font-semibold text-left [white-space:nowrap]"
+                              className="text-[17px]/[normal] box-border text-[#B0271A] font-[Inter,system-ui,sans-serif] font-semibold text-left shrink-0"
                             >
                               ▼
                             </div>
                             <div
                               data-pencil-name="Name"
+                              data-edit-key={`dept-name-${result.id}`}
                               className="text-[18px]/[normal] box-border text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold text-left min-w-0 break-words"
                             >
                               {result.department_name}
@@ -745,7 +1014,8 @@ const App = () => {
                           </div>
                           <div
                             data-pencil-name="Bullets"
-                            className="text-[16px]/[25px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left"
+                            data-edit-key={`dept-bullets-${result.id}`}
+                            className="text-[16px]/[25px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left break-words"
                           >
                             • {result.alert_statement_gujarati}
                           </div>
@@ -800,13 +1070,15 @@ const App = () => {
                           ></div>
                           <div
                             data-pencil-name="Title"
-                            className="text-[18px]/[normal] box-border text-[#E67E22] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold text-left [white-space:nowrap]"
+                            data-edit-key={`fdept-title-${result.id}`}
+                            className="text-[18px]/[normal] box-border text-[#E67E22] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold text-left break-words"
                           >
                             ▸ {result.department}
                           </div>
                           <div
                             data-pencil-name="Body"
-                            className="text-[16px]/[26px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left"
+                            data-edit-key={`fdept-body-${result.id}`}
+                            className="text-[16px]/[26px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left break-words"
                           >
                             {result.summary_body}
                           </div>
@@ -859,6 +1131,7 @@ const App = () => {
                         >
                           <div
                             data-pencil-name="Kicker"
+                            data-edit-key={`neg-kicker-${result.id}`}
                             className="text-[11px]/[normal] text-[#5A5A5A]  text-left min-w-0 break-words w-full"
                           >
                             {result.article_category}
@@ -866,6 +1139,7 @@ const App = () => {
 
                           <div
                             data-pencil-name="Headline"
+                            data-edit-key={`neg-headline-${result.id}`}
                             className="text-[16px]/[22px] w-full text-[#163B7A] font-extrabold text-left min-w-0 break-words"
                           >
                             {result.summary_headline}
@@ -873,6 +1147,7 @@ const App = () => {
 
                           <div
                             data-pencil-name="Byline"
+                            data-edit-key={`neg-byline-${result.id}`}
                             className="text-[11px]/[normal] text-[#8A8A8A] text-left min-w-0 break-words w-full"
                           >
                             {result.district}
@@ -881,6 +1156,7 @@ const App = () => {
 
                           <div
                             data-pencil-name="Body"
+                            data-edit-key={`neg-body-${result.id}`}
                             className="text-[14px]/[22px] w-full text-[#5A5A5A] text-left min-w-0 break-words"
                           >
                             {result.summary_body}
@@ -1030,26 +1306,30 @@ const App = () => {
                       >
                         <div
                           data-pencil-name="Number"
-                          className="text-[24px]/[normal] box-border text-[#E67E22] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left [white-space:nowrap]"
+                          data-edit-key={`pos-number-${result.id}`}
+                          className="text-[24px]/[normal] box-border text-[#E67E22] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left"
                         >
                           {index + 1}
                         </div>
                         <div
                           data-pencil-name="Tag"
-                          className="text-[11px]/[normal] box-border text-[#163B7A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-bold tracking-[0.1px] text-left [white-space:nowrap]"
+                          data-edit-key={`pos-tag-${result.id}`}
+                          className="text-[11px]/[normal] box-border text-[#163B7A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-bold tracking-[0.1px] text-left"
                         >
                           {result.department}
                         </div>
                       </div>
                       <div
                         data-pencil-name="Title"
-                        className="text-[20px]/[24px] box-border w-full text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left"
+                        data-edit-key={`pos-title-${result.id}`}
+                        className="text-[20px]/[24px] box-border w-full text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left break-words"
                       >
                         {result.summary_headline}
                       </div>
                       <div
                         data-pencil-name="Body"
-                        className="text-[14px]/[22px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left"
+                        data-edit-key={`pos-body-${result.id}`}
+                        className="text-[14px]/[22px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left break-words"
                       >
                         {result.summary_body}
                       </div>
