@@ -260,6 +260,7 @@ const App = () => {
   }, [edits]);
 
   const positive_news = newsresult.filter((value) => value.news_type == 'positive');
+  const negative_news = newsresult.filter((value) => value.news_type == 'negative');
   const focus_district = newsresult.filter((value) => value.news_type == 'focused district')
   const focus_department = newsresult.filter((value) => value.news_type == 'focused department')
 
@@ -466,11 +467,11 @@ const App = () => {
   const kpiPercentText = typeof budgetPercent === "number" ? `${budgetPercent.toFixed(2)}%` : "94.2%";
   const kpiSubHeaderText = budgetPrabhag || "મૂડીખર્ચ સિદ્ધિ";
   const m1Text = typeof budgetTotal === "number"
-    ? `બજેટ ફાળવણી: ${budgetTotal.toLocaleString("en-IN")} કરોડ`
-    : "બજેટ ફાળવણી: N/A";
+    ? `બજેટ જોગવાઈ: ${budgetTotal.toLocaleString("en-IN")} કરોડ`
+    : "બજેટ જોગવાઈ: N/A";
   const m2Text = typeof budgetGrant === "number"
-    ? `કરાયેલ ગ્રાન્ટ: ${budgetGrant.toLocaleString("en-IN")} કરોડ`
-    : "કરાયેલ ગ્રાન્ટ: N/A";
+    ? `ફાળવેલ ગ્રાન્ટ: ${budgetGrant.toLocaleString("en-IN")} કરોડ`
+    : "ફાળવેલ ગ્રાન્ટ: N/A";
 
   return (
     <>
@@ -1163,7 +1164,7 @@ const App = () => {
                 ></div>
                 <div className="flex flex-col gap-[16px] w-full [flex:1_1_0] overflow-hidden">
                   {
-                    newsresult.slice(0, 3)?.map((result) => (
+                    negative_news.slice(0, 3)?.map((result) => (
                       <div
                         key={result.id}
                         data-pencil-name="FeatureBody"
