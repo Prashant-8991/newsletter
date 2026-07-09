@@ -84,6 +84,18 @@ interface BudgetResponseInterface {
   created_at: string;
 }
 
+
+interface PragatiInterface {
+  id: string;
+  name_of_project: string;
+  timely_progress: number;
+  physical_progress: number;
+  financial_progress: number;
+  statement: string;
+  statement_gujarati: string;
+  created_at: string;
+}
+
 const App = () => {
 
   const [state, setState] = useState<KpiData[]>(() => {
@@ -109,6 +121,11 @@ const App = () => {
   const [budgetresult, setbudgetResult] = useState<BudgetResponseInterface[]>(() => {
     const injected = (window as { __injectedBudgetData?: unknown }).__injectedBudgetData;
     return Array.isArray(injected) ? (injected as BudgetResponseInterface[]) : [];
+  });
+
+  const [pragatiresult, setPragatiResult] = useState<PragatiInterface[]>(() => {
+    const injected = (window as { __injectedBudgetData?: unknown }).__injectedBudgetData;
+    return Array.isArray(injected) ? (injected as PragatiInterface[]) : [];
   });
 
   const today = useMemo(
@@ -437,6 +454,34 @@ const App = () => {
           w.__budgetLoaded = true;
         });
     }
+
+
+
+    // pragati
+    if (Array.isArray(w.__injectedBudgetData)) {
+      w.__budgetLoaded = true;
+    } else {
+      fetch(
+        `https://swar-api.gujarat.gov.in/newsletter-api/pragati?date=${today}&limit=50&offset=0`
+      )
+        .then((res) => res.json())
+        .then((data) => {
+          console.log("pragati data:", data);
+
+          const pragati = Array.isArray(data)
+            ? data
+            : Array.isArray(data?.data)
+              ? data.data
+              : [];
+
+          setPragatiResult(pragati);
+          w.__budgetLoaded = true;
+        })
+        .catch((err) => {
+          console.error("budget fetch error:", err);
+          w.__budgetLoaded = true;
+        });
+    }
   }, []);
 
   const groupedRtpms = useMemo(() => {
@@ -458,6 +503,32 @@ const App = () => {
     }
     return Array.from(map.values()).slice(0, 3);
   }, [rtpmsresult]);
+
+  const groupedAlerts = useMemo(() => {
+    const map = new Map<string, { department_name: string; alerts: string[] }>();
+    for (const item of alertresult) {
+      const dept = item.department_name;
+      if (!dept) continue;
+      const existing = map.get(dept);
+      if (existing) {
+        if (item.alert_statement_gujarati) {
+          existing.alerts.push(item.alert_statement_gujarati);
+        }
+      } else {
+        map.set(dept, {
+          department_name: dept,
+          alerts: item.alert_statement_gujarati ? [item.alert_statement_gujarati] : [],
+        });
+      }
+    }
+    return Array.from(map.values()).slice(0, 4);
+  }, [alertresult]);
+
+  const hasSingleDepartment = useMemo(() => {
+    if (alertresult.length === 0) return false;
+    const first = alertresult[0].department_name;
+    return alertresult.every((item) => item.department_name === first);
+  }, [alertresult]);
 
   const primaryBudget = useMemo(() => budgetresult[0], [budgetresult]);
   const budgetPercent = primaryBudget?.data?.grant_percentage;
@@ -649,19 +720,19 @@ const App = () => {
               >
                 પ્રથમ ત્રૈમાસિકમાં 94.2% મૂડીખર્ચ: ગુજરાત ઐતિહાસિક ઊંચાઈ તરફ
               </div> */}
-              <div
+              {/* <div
                 data-pencil-name="Summary"
                 className="text-[13px]/[20px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left"
               >
                 નાણાં વિભાગના અહેવાલ મુજબ 412 પ્રોજેક્ટમાં ₹18,427 કરોડનું વિતરણ. ખેતી, આરોગ્ય અને શહેરી
                 વિકાસ શ્રેષ્ઠ. સાત જિલ્લાઓ સરેરાશ ખર્ચથી નીચે.
-              </div>
-              <div
+              </div> */}
+              {/* <div
                 data-pencil-name="Byline"
                 className="text-[10px]/[normal] box-border text-[#8A8A8A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-normal tracking-[0.1px] text-left w-full min-w-0 break-words"
               >
                 સ્ત્રોત: નાણાં વિભાગ · ત્રૈમાસિક કાર્યક્ષમતા અહેવાલ
-              </div>
+              </div> */}
               <div
                 data-pencil-name="Bottom Rule"
                 className="box-border w-full h-[0.5px] shrink-0 bg-[#DADADA]"
@@ -835,7 +906,7 @@ const App = () => {
                 data-pencil-name="Label"
                 className="text-[15px]/[normal] box-border text-[#163B7A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-bold tracking-[0.1px] text-left [white-space:nowrap]"
               >
-                ફોકસ જિલ્લો · અમદાવાદ
+                સૌથી ખરાબ પ્રદર્શન · વિભાગો
               </div>
               <div
                 data-pencil-name="Rule"
@@ -851,7 +922,7 @@ const App = () => {
                 data-pencil-name="Stories Row"
                 className="box-border w-full [flex:1_1_0] flex flex-row gap-[24px] justify-start items-start"
               >
-                {
+                {/* {
                   focus_district && focus_district.splice(0, 3).map((result) => (
                     <>
                       <div
@@ -875,43 +946,81 @@ const App = () => {
                       </div>
                     </>
                   ))
-                }
-                {/* <div
-                  data-pencil-name="Story મેટ્રો ફેઝ-2"
-                  className="box-border w-[229px] shrink-0 h-fit flex flex-col gap-[6px] p-[8px_0px] justify-start items-start"
-                >
+                } */}
+
+                {hasSingleDepartment && groupedAlerts.length > 0 ? (
                   <div
-                    data-pencil-name="Title"
-                    className="text-[20px]/[normal] box-border text-[#E67E22] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold text-left [white-space:nowrap]"
+                    data-pencil-name={`Dept ${groupedAlerts[0].department_name}`}
+                    className="box-border w-full h-fit shrink-0 flex flex-col mb-3 gap-[1px] p-[3px_0px] justify-start items-start"
                   >
-                    ▸ મેટ્રો ફેઝ-2
+                    <div
+                      data-pencil-name="Top Rule"
+                      className="box-border w-full h-[0.5px] shrink-0 bg-[#DADADA]"
+                    ></div>
+                    <div
+                      data-pencil-name="Bullets"
+                      className="text-[15px]/[24px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left break-words"
+                    >
+                      {groupedAlerts[0].alerts.map((alert, idx) => (
+                        <div
+                          key={idx}
+                          data-pencil-name="Alert"
+                          data-edit-key={`dept-alert-${groupedAlerts[0].department_name}-${idx}`}
+                          className="break-words"
+                        >
+                          {alert}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div
-                    data-pencil-name="Body"
-                    className="text-[14px]/[22px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left"
-                  >
-                    4.8 લાખ મુસાફરો/દિવસ, 23% વધુ. કાંકરિયા લેકફ્રન્ટ ઉદ્ઘાટન. 3 મેટ્રો લાઇન્સ મંજૂર —
-                    થલતેજ-બોપલ, અક્ષરધામ-ગાંધીનગર, નરોડા-વટવા. 47 નવા સ્ટેશન.
-                  </div>
-                </div> */}
-                {/* <div
-                  data-pencil-name="Story EV ઈન્ફ્રાસ્ટ્રક્ચર"
-                  className="box-border w-[229px] shrink-0 h-fit flex flex-col gap-[6px] p-[8px_0px] justify-start items-start"
-                >
-                  <div
-                    data-pencil-name="Title"
-                    className="text-[20px]/[normal] box-border text-[#E67E22] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold text-left [white-space:nowrap]"
-                  >
-                    ▸ EV ઈન્ફ્રાસ્ટ્રક્ચર
-                  </div>
-                  <div
-                    data-pencil-name="Body"
-                    className="text-[14px]/[22px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left"
-                  >
-                    12 EV ચાર્જિંગ સ્ટેશન કાર્યરત. મ્યુનિસિપલ બોન્ડ 3.2 ગણું ઓવરસબ્સ્ક્રાઇબ. ₹2,400 Cr
-                    રોકાણ. GIDC 18 નવા પ્રોજેક્ટ્સ મંજૂર. 78% ગ્રીન energy.
-                  </div>
-                </div> */}
+                ) : (
+                  groupedAlerts.map((group) => (
+                    <>
+                      <div
+                        data-pencil-name={`Dept ${group.department_name}`}
+                        className="box-border w-full h-fit shrink-0 flex flex-col mb-3 gap-[1px] p-[3px_0px] justify-start items-start"
+                      >
+                        <div
+                          data-pencil-name="Top Rule"
+                          className="box-border w-full h-[0.5px] shrink-0 bg-[#DADADA]"
+                        ></div>
+                        <div
+                          data-pencil-name="Title Row"
+                          className="box-border w-fit h-fit shrink-0 flex flex-row gap-[8px] justify-start items-center"
+                        >
+                          <div
+                            data-pencil-name="Arrow"
+                            className="text-[17px]/[normal] box-border text-[#B0271A] font-[Inter,system-ui,sans-serif] font-semibold text-left shrink-0"
+                          >
+                            ▼
+                          </div>
+                          <div
+                            data-pencil-name="Name"
+                            data-edit-key={`dept-name-${group.department_name}`}
+                            className="text-[18px]/[normal] box-border text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold text-left min-w-0 break-words"
+                          >
+                            {group.department_name}
+                          </div>
+                        </div>
+                        <div
+                          data-pencil-name="Bullets"
+                          className="text-[16px]/[25px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left break-words"
+                        >
+                          {group.alerts.map((alert, idx) => (
+                            <div
+                              key={idx}
+                              data-pencil-name="Alert"
+                              data-edit-key={`dept-alert-${group.department_name}-${idx}`}
+                              className="break-words"
+                            >
+                              • {alert}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  ))
+                )}
                 <div
                   data-pencil-name="Top Rule"
                   className="box-border [flex:1_1_0] h-[0.5px] bg-[#DADADA]"
@@ -1028,11 +1137,36 @@ const App = () => {
 
                   {/* alerts here */}
 
-                  {
-                    alertresult && alertresult.slice(0, 4).map((result) => (
+                  {hasSingleDepartment && groupedAlerts.length > 0 ? (
+                    <div
+                      data-pencil-name={`Dept ${groupedAlerts[0].department_name}`}
+                      className="box-border w-full h-fit shrink-0 flex flex-col mb-3 gap-[1px] p-[3px_0px] justify-start items-start"
+                    >
+                      <div
+                        data-pencil-name="Top Rule"
+                        className="box-border w-full h-[0.5px] shrink-0 bg-[#DADADA]"
+                      ></div>
+                      <div
+                        data-pencil-name="Bullets"
+                        className="text-[15px]/[24px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left break-words"
+                      >
+                        {groupedAlerts[0].alerts.map((alert, idx) => (
+                          <div
+                            key={idx}
+                            data-pencil-name="Alert"
+                            data-edit-key={`dept-alert-${groupedAlerts[0].department_name}-${idx}`}
+                            className="break-words"
+                          >
+                            {alert}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    groupedAlerts.map((group) => (
                       <>
                         <div
-                          data-pencil-name="Dept શહેરી વિકાસ વિભાગ"
+                          data-pencil-name={`Dept ${group.department_name}`}
                           className="box-border w-full h-fit shrink-0 flex flex-col mb-3 gap-[1px] p-[3px_0px] justify-start items-start"
                         >
                           <div
@@ -1051,23 +1185,31 @@ const App = () => {
                             </div>
                             <div
                               data-pencil-name="Name"
-                              data-edit-key={`dept-name-${result.id}`}
+                              data-edit-key={`dept-name-${group.department_name}`}
                               className="text-[18px]/[normal] box-border text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold text-left min-w-0 break-words"
                             >
-                              {result.department_name}
+                              {group.department_name}
                             </div>
                           </div>
                           <div
                             data-pencil-name="Bullets"
-                            data-edit-key={`dept-bullets-${result.id}`}
                             className="text-[16px]/[25px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left break-words"
                           >
-                            • {result.alert_statement_gujarati}
+                            {group.alerts.map((alert, idx) => (
+                              <div
+                                key={idx}
+                                data-pencil-name="Alert"
+                                data-edit-key={`dept-alert-${group.department_name}-${idx}`}
+                                className="break-words"
+                              >
+                                • {alert}
+                              </div>
+                            ))}
                           </div>
                         </div>
                       </>
                     ))
-                  }
+                  )}
 
 
                   {/* alerts end here */}
@@ -1089,7 +1231,7 @@ const App = () => {
                       data-pencil-name="Label"
                       className="text-[15px]/[normal] box-border text-[#163B7A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-bold tracking-[0.1px] text-left [white-space:nowrap]"
                     >
-                      ફોકસ વિભાગ · આરોગ્ય અને કુટુંબ કલ્યાણ
+                      ફોકસ વિભાગ
                     </div>
                     <div
                       data-pencil-name="Rule"
@@ -1177,7 +1319,7 @@ const App = () => {
                           <div
                             data-pencil-name="Kicker"
                             data-edit-key={`neg-kicker-${result.id}`}
-                            className="text-[11px]/[normal] text-[#5A5A5A]  text-left min-w-0 break-words w-full"
+                            className="text-[11px]/[normal] text-[#5A5A5A]  text-left min-w-0 break-words w-full font-['Noto_Serif_Gujarati',system-ui,sans-serif]"
                           >
                             {result.article_category}
                           </div>
@@ -1185,7 +1327,7 @@ const App = () => {
                           <div
                             data-pencil-name="Headline"
                             data-edit-key={`neg-headline-${result.id}`}
-                            className="text-[16px]/[22px] w-full text-[#163B7A] font-extrabold text-left min-w-0 break-words"
+                            className="text-[16px]/[22px] w-full text-[#163B7A] font-extrabold text-left min-w-0 break-words font-['Noto_Serif_Gujarati',system-ui,sans-serif]"
                           >
                             {result.summary_headline}
                           </div>
@@ -1193,7 +1335,7 @@ const App = () => {
                           <div
                             data-pencil-name="Byline"
                             data-edit-key={`neg-byline-${result.id}`}
-                            className="text-[11px]/[normal] text-[#8A8A8A] text-left min-w-0 break-words w-full"
+                            className="text-[11px]/[normal] text-[#8A8A8A] text-left min-w-0 break-words w-full font-['Noto_Serif_Gujarati',system-ui,sans-serif]"
                           >
                             {result.district}
                             {result.department !== "N/A"}
@@ -1214,95 +1356,47 @@ const App = () => {
                     <div className="text-[14px]/[22px] text-[#8A8A8A] text-left">કોઈ નકારાત્મક અહેવાલ ઉપલબ્ધ નથી</div>
                   )}
                 </div>
-                <div
-                  data-pencil-name="Related Section"
-                  className="box-border w-full h-fit shrink-0 flex flex-col gap-[6px] p-[12px_0px_0px_0px] justify-start items-start"
-                >
-                  {/* <div
-                    data-pencil-name="Divider"
-                    className="box-border w-full h-[0.8px] shrink-0 bg-[#2C2C2C]"
-                  ></div> */}
-                  {/* <div
-                    data-pencil-name="Related Label"
-                    className="text-[12px]/[normal] box-border text-[#2C2C2C] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-bold tracking-[0.1px] text-left [white-space:nowrap]"
-                  >
-                    સંબંધિત · સંક્ષેપમાં
-                  </div> */}
-                  {/* <div
-                    data-pencil-name="Related Row"
-                    className="box-border w-full [flex:1_1_0] flex flex-row gap-[12px] justify-start items-start"
+                {pragatiresult?.length > 0 && (
+                  <div
+                    data-pencil-name="Related Section"
+                    className="box-border w-full h-fit shrink-0 flex flex-col gap-[6px] p-[12px_0px_0px_0px] justify-start items-start"
                   >
                     <div
-                      data-pencil-name="Related આરોગ્ય"
-                      className="box-border [flex:1_1_0] h-full flex flex-col gap-[1px] p-[4px_0px_0px_0px] justify-start items-start"
-                    >
-                      <div
-                        data-pencil-name="Tag"
-                        className="text-[11px]/[normal] box-border text-[#B0271A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-bold tracking-[0.1px] text-left [white-space:nowrap]"
-                      >
-                        આરોગ્ય
-                      </div>
-                      <div
-                        data-pencil-name="Title"
-                        className="text-[18px]/[23px] box-border w-full text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold text-left"
-                      >
-                        TB દવાની અછત
-                      </div>
-                      <div
-                        data-pencil-name="Body"
-                        className="text-[16px]/[23px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left"
-                      >
-                        14 PHCમાં દર્દીઓ બાહ્ય ફાર્મસી તરફ.
-                      </div>
-                    </div>
+                      data-pencil-name="Divider"
+                      className="box-border w-full h-[0.8px] shrink-0 bg-[#2C2C2C]"
+                    />
+
                     <div
-                      data-pencil-name="Related શિક્ષણ"
-                      className="box-border [flex:1_1_0] h-full flex flex-col gap-[1px] p-[4px_0px_0px_0px] justify-start items-start"
+                      data-pencil-name="Related Label"
+                      className="text-[12px]/[normal] box-border text-[#2C2C2C] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-bold tracking-[0.1px] text-left"
                     >
-                      <div
-                        data-pencil-name="Tag"
-                        className="text-[11px]/[normal] box-border text-[#B0271A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-bold tracking-[0.1px] text-left [white-space:nowrap]"
-                      >
-                        શિક્ષણ
-                      </div>
-                      <div
-                        data-pencil-name="Title"
-                        className="text-[18px]/[23px] box-border w-full text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold text-left"
-                      >
-                        મધ્યાહન ભોજન ઓડિટ
-                      </div>
-                      <div
-                        data-pencil-name="Body"
-                        className="text-[16px]/[23px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left"
-                      >
-                        દાહોદ-છોટા ઉદેપુરમાં 23% નમૂના નબળા.
-                      </div>
+                      સંબંધિત · સંક્ષેપમાં
                     </div>
+
                     <div
-                      data-pencil-name="Related ઉદ્યોગ"
-                      className="box-border [flex:1_1_0] h-full flex flex-col gap-[1px] p-[4px_0px_0px_0px] justify-start items-start"
+                      data-pencil-name="Related Row"
+                      className="box-border w-full flex flex-row gap-[12px] justify-start items-start"
                     >
                       <div
-                        data-pencil-name="Tag"
-                        className="text-[11px]/[normal] box-border text-[#B0271A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-bold tracking-[0.1px] text-left [white-space:nowrap]"
+                        data-pencil-name="Related"
+                        className="box-border flex-1 flex flex-col gap-[1px] pt-[4px]"
                       >
-                        ઉદ્યોગ
-                      </div>
-                      <div
-                        data-pencil-name="Title"
-                        className="text-[18px]/[23px] box-border w-full text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold text-left"
-                      >
-                        MSME પાવર કટ
-                      </div>
-                      <div
-                        data-pencil-name="Body"
-                        className="text-[16px]/[23px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left"
-                      >
-                        દૈનિક 6 કલાક પાવર કટ; ઉત્પાદન પ્રભાવિત.
+
+                        <div
+                          className="text-[18px]/[23px] text-[#163B7A] font-bold"
+                        >
+                          {pragatiresult[0]?.name_of_project}
+                        </div>
+
+                        <div
+                          className="text-[16px]/[23px] text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif]"
+                        >
+                          {pragatiresult[0]?.statement_gujarati}
+                        </div>
                       </div>
                     </div>
-                  </div> */}
-                </div>
+                  </div>
+                )}
               </div>
             </div>
             <div
