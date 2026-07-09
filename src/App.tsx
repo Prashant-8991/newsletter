@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 interface KpiData {
   kpiID: number
   KPIName: string
@@ -20,11 +20,13 @@ interface KpiData {
 
 interface NewsItem {
   id: number
+  category: string
   article_category: string
   summary_headline: string
   district: string
   department: string
   summary_body: string
+  news_type: string | null
 }
 
 interface AlertItem {
@@ -36,6 +38,28 @@ interface AlertItem {
   name_of_alert: string;
   alert_statement: string;
   alert_statement_gujarati: string;
+  created_at: string;
+};
+
+
+interface RTPMSDataInterface {
+  id: number;
+  wisi: number;
+  sr_no: number;
+  kpi_id: number;
+  source: string;
+  officer: string;
+  district: string;
+  kpi_name: string;
+  department: string;
+  template_filled: string;
+}
+
+
+interface RtPmsInterface {
+  id: number;
+  source_id: string;
+  data: RTPMSDataInterface;
   created_at: string;
 }
 
@@ -56,14 +80,25 @@ const App = () => {
     return Array.isArray(injected) ? (injected as AlertItem[]) : [];
   });
 
+  const [rtpmsresult, setrtpmsResult] = useState<RtPmsInterface[]>(() => {
+    const injected = (window as { __injectedRtpmsData?: unknown }).__injectedRtpmsData;
+    return Array.isArray(injected) ? (injected as RtPmsInterface[]) : [];
+  });
+
+  const positive_news = newsresult.filter((value) => value.news_type == 'positive');
+  const focus_district = newsresult.filter((value) => value.news_type == 'focused district')
+  const focus_department = newsresult.filter((value) => value.news_type == 'focused department')
+
   useEffect(() => {
     const w = window as {
       __injectedKpiData?: unknown;
       __injectedNewsData?: unknown;
       __injectedAlertData?: unknown;
+      __injectedRtpmsData?: unknown;
       __kpiLoaded?: boolean;
       __newsLoaded?: boolean;
       __alertLoaded?: boolean;
+      __rtpmsLoaded?: boolean;
     };
 
     // KPI
@@ -145,8 +180,56 @@ const App = () => {
           console.error("Alert fetch error:", err);
           w.__alertLoaded = true;
         });
+    };
+
+
+    // rtpms
+    if (Array.isArray(w.__injectedRtpmsData)) {
+      w.__rtpmsLoaded = true;
+    } else {
+      fetch(
+        `https://swar-api.gujarat.gov.in/newsletter-api/rtpms?date=${today}&limit=50&offset=0`
+      )
+        .then((res) => res.json())
+        .then((data) => {
+          console.log("rtpms data:", data);
+
+          const rtpms = Array.isArray(data)
+            ? data
+            : Array.isArray(data?.data)
+              ? data.data
+              : [];
+
+          setrtpmsResult(rtpms);
+          w.__rtpmsLoaded = true;
+        })
+        .catch((err) => {
+          console.error("rtpms fetch error:", err);
+          w.__rtpmsLoaded = true;
+        });
     }
   }, []);
+
+  const groupedRtpms = useMemo(() => {
+    const map = new Map<string, { district: string; template_filled: string[] }>();
+    for (const item of rtpmsresult) {
+      const d = item.data?.district;
+      if (!d) continue;
+      const existing = map.get(d);
+      if (existing) {
+        if (item.data.template_filled) {
+          existing.template_filled.push(item.data.template_filled);
+        }
+      } else {
+        map.set(d, {
+          district: d,
+          template_filled: item.data.template_filled ? [item.data.template_filled] : [],
+        });
+      }
+    }
+    return Array.from(map.values()).slice(0, 3);
+  }, [rtpmsresult]);
+
   return (
     <>
       <button
@@ -154,10 +237,11 @@ const App = () => {
           const btn = document.getElementById('export-pdf-btn') as HTMLButtonElement | null
           if (btn) { btn.disabled = true; btn.textContent = 'PDF બનાવી રહ્યા છીએ…' }
           try {
-            const res = await fetch('/api/pdf', {
+            const res = await fetch('https://swar-api.gujarat.gov.in/newsletter-pdf/api/pdf', {
+            // const res = await fetch('/api/pdf', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ kpiData: state, newsData: newsresult }),
+              body: JSON.stringify({ kpiData: state, newsData: newsresult, rtpmsData: rtpmsresult }),
             })
             if (!res.ok) throw new Error(await res.text())
             const blob = await res.blob()
@@ -254,24 +338,17 @@ const App = () => {
               data-pencil-name="Headline of the Day"
               className="box-border w-full h-fit shrink-0 flex flex-col gap-[4px] justify-start items-start"
             >
-              <div
+              {/* <div
                 data-pencil-name="Label"
                 className="text-[13px]/[normal] box-border text-[#E67E22] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-bold tracking-[0.1px] text-left [white-space:nowrap]"
               >
                 આજની મુખ્ય બાબત
-              </div>
-              <div
+              </div> */}
+              {/* <div
                 data-pencil-name="Headline"
                 className="text-[32px]/[35px] box-border w-full text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-medium tracking-[-0.3px] text-left"
               >
                 પ્રથમ ત્રૈમાસિકમાં 94.2% મૂડીખર્ચ: ગુજરાત ઐતિહાસિક ઊંચાઈ તરફ
-              </div>
-
-              {/* <div
-                data-pencil-name="Headline"
-                className="text-[32px]/[35px]   box-border text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-medium tracking-[-0.3px] text-left"
-              >
-                પ્રથમ ત્રૈમાસિકમાં 94.2% મૂડીખર્ચ: ગુજરાત ઐતિહાસિક ઊંચાઈ તરફ 
               </div> */}
               <div
                 data-pencil-name="Summary"
@@ -315,10 +392,10 @@ const App = () => {
                 >
                   જિલ્લા માટે સમીક્ષા ના મુદ્દા
                 </div>
-                {state.slice(0, 3).map((item) => (
+                {groupedRtpms.map((group) => (
                   <div
-                    key={item.kpiID}
-                    data-pencil-name={`District ${item.DistrictName}`}
+                    key={group.district}
+                    data-pencil-name={`District ${group.district}`}
                     className="box-border w-full h-fit shrink-0 flex flex-col gap-[3px] p-[6px_0px] justify-start items-start"
                   >
                     <div
@@ -337,20 +414,21 @@ const App = () => {
                       </div>
                       <div
                         data-pencil-name="Name"
-                        className="text-[22px]/[normal] box-border text-[#2C2C2C] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold tracking-[0.2px] text-left min-w-0 break-words"
+                        className="text-[22px]/[normal] box-border text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold tracking-[0.2px] text-left min-w-0 break-words"
                       >
-                        {item.DistrictName}
+                        {group.district}
                       </div>
                     </div>
                     <div
                       data-pencil-name="Bullets"
                       className="text-[15px]/[26px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left break-words"
                     >
-                      • {item.KPIName}
-                      <br />
-                      • મૂલ્ય: {item.Per}% · વેઇટેજ: {item.weightage}
-                      <br />
-                      • WISI સ્કોર: {item.wisi}
+                      {group.template_filled.map((tf, idx) => (
+                        <span key={idx}>
+                          • {tf}
+                          {idx < group.template_filled.length - 1 && <br />}
+                        </span>
+                      ))}
                     </div>
                   </div>
                 ))}
@@ -374,7 +452,7 @@ const App = () => {
                   data-pencil-name="Rule"
                   className="box-border w-[129px] h-[2px] shrink-0 bg-[#E67E22]"
                 ></div>
-                <div
+                {/* <div
                   data-pencil-name="KPI Row"
                   className="box-border w-full h-fit shrink-0 flex flex-row gap-[5px] justify-start items-start"
                 >
@@ -390,19 +468,19 @@ const App = () => {
                   >
                     ▲
                   </div>
-                </div>
-                <div
+                </div> */}
+                {/* <div
                   data-pencil-name="Description"
                   className="text-[19px]/[normal] box-border text-[#2C2C2C] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-medium text-left w-full min-w-0 break-words"
                 >
                   મૂડીખર્ચ સિદ્ધિ
-                </div>
-                <div
+                </div> */}
+                {/* <div
                   data-pencil-name="Comparison"
                   className="text-[16px]/[normal] box-border text-[#8A8A8A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left [white-space:nowrap]"
                 >
                   લક્ષ્યાંક 87.4% સામે · Q1 FY 2026-27
-                </div>
+                </div> */}
                 <div
                   data-pencil-name="Divider"
                   className="box-border w-full h-[1px] shrink-0 bg-[#DADADA]"
@@ -411,31 +489,31 @@ const App = () => {
                   data-pencil-name="Micro Row"
                   className="box-border w-full h-fit shrink-0 flex flex-row gap-[8px] p-[6px_0px_0px_0px] justify-between items-start"
                 >
-                  <div
+                  {/* <div
                     data-pencil-name="M1"
                     className="text-[13px]/[normal] box-border text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left min-w-0 break-words"
                   >
                     ₹18,427 કરોડ
-                  </div>
-                  <div
+                  </div> */}
+                  {/* <div
                     data-pencil-name="M2"
                     className="text-[13px]/[normal] box-border text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left min-w-0 break-words"
                   >
                     412 પ્રોજેક્ટ
-                  </div>
-                  <div
+                  </div> */}
+                  {/* <div
                     data-pencil-name="M3"
                     className="text-[13px]/[normal] box-border text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left min-w-0 break-words"
                   >
                     33 જિલ્લા
-                  </div>
+                  </div> */}
                 </div>
-                <div
+                {/* <div
                   data-pencil-name="Caption"
                   className="text-[10px]/[normal] box-border text-[#8A8A8A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-normal tracking-[0.1px] text-left [white-space:nowrap]"
                 >
                   સ્ત્રોત: નાણાં વિભાગ
-                </div>
+                </div> */}
               </div>
             </div>
             <div
@@ -452,36 +530,40 @@ const App = () => {
                 data-pencil-name="Rule"
                 className="box-border w-[173px] h-[2px] shrink-0 bg-[#163B7A]"
               ></div>
-              <div
+              {/* <div
                 data-pencil-name="Title"
                 className="text-[28px]/[normal] box-border text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-medium text-left [white-space:nowrap]"
               >
                 સ્માર્ટ મોબિલિટી ફેઝ II શરૂ
-              </div>
+              </div> */}
               <div
                 data-pencil-name="Stories Row"
                 className="box-border w-full [flex:1_1_0] flex flex-row gap-[24px] justify-start items-start"
               >
-                <div
-                  data-pencil-name="Story AMRUT 2.0"
-                  className="box-border w-[229px] shrink-0 h-fit flex flex-col gap-[6px] p-[8px_0px] justify-start items-start"
-                >
-                  <div
-                    data-pencil-name="Title"
-                    className="text-[20px]/[normal] box-border text-[#E67E22] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold text-left [white-space:nowrap]"
-                  >
-                    ▸ AMRUT 2.0
-                  </div>
-                  <div
-                    data-pencil-name="Body"
-                    className="text-[14px]/[22px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left"
-                  >
-                    ₹2,140 Cr ફાળવણી 84 km ટ્રાન્ઝિટ કોરિડોર માટે મંજૂર. પ્રોજેક્ટ 18 મહિનામાં પૂર્ણ,
-                    વર્લ્ડ બેંક સહ-ધિરાણ. AMC ભૂમિ સંપાદન શરૂ. 12 બસ સ્ટોપ, 4 ફૂટ ઓવરબ્રિજ, 3
-                    ઇન્ટરચેન્જ.
-                  </div>
-                </div>
-                <div
+                {
+                  focus_district && focus_district.splice(0, 3).map((result) => (
+                    <>
+                      <div
+                        data-pencil-name="Story AMRUT 2.0"
+                        className="box-border w-[229px] shrink-0 h-fit flex flex-col gap-[6px] p-[8px_0px] justify-start items-start"
+                      >
+                        <div
+                          data-pencil-name="Title"
+                          className="text-[20px]/[normal] box-border text-[#E67E22] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold text-left [white-space:nowrap]"
+                        >
+                          ▸ {result.summary_headline}
+                        </div>
+                        <div
+                          data-pencil-name="Body"
+                          className="text-[14px]/[22px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left"
+                        >
+                          {result.summary_body}
+                        </div>
+                      </div>
+                    </>
+                  ))
+                }
+                {/* <div
                   data-pencil-name="Story મેટ્રો ફેઝ-2"
                   className="box-border w-[229px] shrink-0 h-fit flex flex-col gap-[6px] p-[8px_0px] justify-start items-start"
                 >
@@ -498,8 +580,8 @@ const App = () => {
                     4.8 લાખ મુસાફરો/દિવસ, 23% વધુ. કાંકરિયા લેકફ્રન્ટ ઉદ્ઘાટન. 3 મેટ્રો લાઇન્સ મંજૂર —
                     થલતેજ-બોપલ, અક્ષરધામ-ગાંધીનગર, નરોડા-વટવા. 47 નવા સ્ટેશન.
                   </div>
-                </div>
-                <div
+                </div> */}
+                {/* <div
                   data-pencil-name="Story EV ઈન્ફ્રાસ્ટ્રક્ચર"
                   className="box-border w-[229px] shrink-0 h-fit flex flex-col gap-[6px] p-[8px_0px] justify-start items-start"
                 >
@@ -516,7 +598,7 @@ const App = () => {
                     12 EV ચાર્જિંગ સ્ટેશન કાર્યરત. મ્યુનિસિપલ બોન્ડ 3.2 ગણું ઓવરસબ્સ્ક્રાઇબ. ₹2,400 Cr
                     રોકાણ. GIDC 18 નવા પ્રોજેક્ટ્સ મંજૂર. 78% ગ્રીન energy.
                   </div>
-                </div>
+                </div> */}
                 <div
                   data-pencil-name="Top Rule"
                   className="box-border [flex:1_1_0] h-[0.5px] bg-[#DADADA]"
@@ -634,11 +716,11 @@ const App = () => {
                   {/* alerts here */}
 
                   {
-                    alertresult && alertresult.map((result) => (
+                    alertresult && alertresult.slice(0, 4).map((result) => (
                       <>
                         <div
                           data-pencil-name="Dept શહેરી વિકાસ વિભાગ"
-                          className="box-border w-full h-fit shrink-0 flex flex-col gap-[1px] p-[3px_0px] justify-start items-start"
+                          className="box-border w-full h-fit shrink-0 flex flex-col mb-3 gap-[1px] p-[3px_0px] justify-start items-start"
                         >
                           <div
                             data-pencil-name="Top Rule"
@@ -656,7 +738,7 @@ const App = () => {
                             </div>
                             <div
                               data-pencil-name="Name"
-                              className="text-[18px]/[normal] box-border text-[#2C2C2C] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold text-left min-w-0 break-words"
+                              className="text-[18px]/[normal] box-border text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold text-left min-w-0 break-words"
                             >
                               {result.department_name}
                             </div>
@@ -698,55 +780,40 @@ const App = () => {
                       data-pencil-name="Rule"
                       className="box-border w-[303px] h-[3px] shrink-0 bg-[#163B7A]"
                     ></div>
-                    <div
+                    {/* <div
                       data-pencil-name="Title"
                       className="text-[24px]/[normal] box-border text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-medium text-left [white-space:nowrap]"
                     >
                       આયુષ્માન ભારત: 2.14 Cr લાભાર્થી
-                    </div>
+                    </div> */}
                   </div>
-                  <div
-                    data-pencil-name="Story OPD ડિજિટાઈઝેશન"
-                    className="box-border w-full [flex:1_1_0] flex flex-col gap-[2px] p-[4px_0px] justify-start items-start"
-                  >
-                    <div
-                      data-pencil-name="Top Rule"
-                      className="box-border w-full h-[0.5px] shrink-0 bg-[#DADADA]"
-                    ></div>
-                    <div
-                      data-pencil-name="Title"
-                      className="text-[18px]/[normal] box-border text-[#E67E22] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold text-left [white-space:nowrap]"
-                    >
-                      ▸ OPD ડિજિટલાઈઝેશન
-                    </div>
-                    <div
-                      data-pencil-name="Body"
-                      className="text-[16px]/[26px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left"
-                    >
-                      1,847 PHC પેપરલેસ. સરેરાશ સમય 12 થી 6 મિનિટ. રાષ્ટ્રીય ક્રમાંક 2.
-                    </div>
-                  </div>
-                  <div
-                    data-pencil-name="Story માતૃ મૃત્યુદરમાં ઘટાડો"
-                    className="box-border w-full [flex:1_1_0] flex flex-col gap-[2px] p-[4px_0px] justify-start items-start"
-                  >
-                    <div
-                      data-pencil-name="Top Rule"
-                      className="box-border w-full h-[0.5px] shrink-0 bg-[#DADADA]"
-                    ></div>
-                    <div
-                      data-pencil-name="Title"
-                      className="text-[18px]/[normal] box-border text-[#E67E22] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold text-left [white-space:nowrap]"
-                    >
-                      ▸ માતૃ મૃત્યુદરમાં ઘટાડો
-                    </div>
-                    <div
-                      data-pencil-name="Body"
-                      className="text-[16px]/[26px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left"
-                    >
-                      MMR 78 થી ઘટીને 68. SDG-2030 લક્ષ્યાંક 8 વર્ષ અગાઉ પ્રાપ્ત.
-                    </div>
-                  </div>
+                  {
+                    focus_department && focus_department.splice(0, 3).map((result) => (
+                      <>
+                        <div
+                          data-pencil-name="Story OPD ડિજિટાઈઝેશન"
+                          className="box-border w-full [flex:1_1_0] flex flex-col gap-[2px] p-[4px_0px] justify-start items-start"
+                        >
+                          <div
+                            data-pencil-name="Top Rule"
+                            className="box-border w-full h-[0.5px] shrink-0 bg-[#DADADA]"
+                          ></div>
+                          <div
+                            data-pencil-name="Title"
+                            className="text-[18px]/[normal] box-border text-[#E67E22] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold text-left [white-space:nowrap]"
+                          >
+                            ▸ {result.department}
+                          </div>
+                          <div
+                            data-pencil-name="Body"
+                            className="text-[16px]/[26px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left"
+                          >
+                            {result.summary_body}
+                          </div>
+                        </div>
+                      </>
+                    ))
+                  }
                 </div>
               </div>
               <div
@@ -790,12 +857,12 @@ const App = () => {
                           data-pencil-name="Lead Column"
                           className="box-border [flex:1_1_0] min-w-0 h-fit flex flex-col gap-[6px] justify-start items-start"
                         >
-                          {/* <div
+                          <div
                             data-pencil-name="Kicker"
                             className="text-[11px]/[normal] text-[#5A5A5A]  text-left min-w-0 break-words w-full"
                           >
                             {result.article_category}
-                          </div> */}
+                          </div>
 
                           <div
                             data-pencil-name="Headline"
@@ -830,17 +897,17 @@ const App = () => {
                   data-pencil-name="Related Section"
                   className="box-border w-full h-fit shrink-0 flex flex-col gap-[6px] p-[12px_0px_0px_0px] justify-start items-start"
                 >
-                  <div
+                  {/* <div
                     data-pencil-name="Divider"
                     className="box-border w-full h-[0.8px] shrink-0 bg-[#2C2C2C]"
-                  ></div>
-                  <div
+                  ></div> */}
+                  {/* <div
                     data-pencil-name="Related Label"
                     className="text-[12px]/[normal] box-border text-[#2C2C2C] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-bold tracking-[0.1px] text-left [white-space:nowrap]"
                   >
                     સંબંધિત · સંક્ષેપમાં
-                  </div>
-                  <div
+                  </div> */}
+                  {/* <div
                     data-pencil-name="Related Row"
                     className="box-border w-full [flex:1_1_0] flex flex-row gap-[12px] justify-start items-start"
                   >
@@ -913,7 +980,7 @@ const App = () => {
                         દૈનિક 6 કલાક પાવર કટ; ઉત્પાદન પ્રભાવિત.
                       </div>
                     </div>
-                  </div>
+                  </div> */}
                 </div>
               </div>
             </div>
@@ -942,6 +1009,7 @@ const App = () => {
                   સમાપન · અઠવાડિયું ૨૭, ૨૦૨૬
                 </div>
               </div>
+              {/* positive news start */}
               <div
                 data-pencil-name="Header Rule"
                 className="box-border w-full h-[3px] shrink-0 bg-[#E67E22]"
@@ -950,146 +1018,46 @@ const App = () => {
                 data-pencil-name="Positive Row"
                 className="box-border w-full h-fit shrink-0 flex flex-row gap-[28px] justify-start items-start"
               >
-                <div
-                  data-pencil-name="Pos માળખાગત"
-                  className="box-border [flex:1_1_0] h-fit flex flex-col gap-[8px] p-[14px_0px_0px_0px] justify-start items-start"
-                >
-                  <div
-                    data-pencil-name="Top Row"
-                    className="box-border w-fit h-fit shrink-0 flex flex-row gap-[8px] justify-start items-center"
-                  >
+                {positive_news && positive_news.map((result, index) => (
+                  <>
                     <div
-                      data-pencil-name="Number"
-                      className="text-[24px]/[normal] box-border text-[#E67E22] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left [white-space:nowrap]"
+                      data-pencil-name="Pos માળખાગત"
+                      className="box-border [flex:1_1_0] h-fit flex flex-col gap-[8px] p-[14px_0px_0px_0px] justify-start items-start"
                     >
-                      ૦૧
+                      <div
+                        data-pencil-name="Top Row"
+                        className="box-border w-fit h-fit shrink-0 flex flex-row gap-[8px] justify-start items-center"
+                      >
+                        <div
+                          data-pencil-name="Number"
+                          className="text-[24px]/[normal] box-border text-[#E67E22] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left [white-space:nowrap]"
+                        >
+                          {index + 1}
+                        </div>
+                        <div
+                          data-pencil-name="Tag"
+                          className="text-[11px]/[normal] box-border text-[#163B7A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-bold tracking-[0.1px] text-left [white-space:nowrap]"
+                        >
+                          {result.department}
+                        </div>
+                      </div>
+                      <div
+                        data-pencil-name="Title"
+                        className="text-[20px]/[24px] box-border w-full text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left"
+                      >
+                        {result.summary_headline}
+                      </div>
+                      <div
+                        data-pencil-name="Body"
+                        className="text-[14px]/[22px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left"
+                      >
+                        {result.summary_body}
+                      </div>
                     </div>
-                    <div
-                      data-pencil-name="Tag"
-                      className="text-[11px]/[normal] box-border text-[#2C2C2C] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-bold tracking-[0.1px] text-left [white-space:nowrap]"
-                    >
-                      માળખાગત
-                    </div>
-                  </div>
-                  <div
-                    data-pencil-name="Title"
-                    className="text-[20px]/[24px] box-border w-full text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left"
-                  >
-                    સરદાર સરોવર 92% ક્ષમતાએ
-                  </div>
-                  <div
-                    data-pencil-name="Body"
-                    className="text-[14px]/[22px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left"
-                  >
-                    4.2 લાખ હેક્ટરમાં અગાઉથી ખરીફ વાવણી શરૂ. 147 ગામડાઓને નિયમિત સિંચાઈ મળી રહી છે.
-                    જળાશયમાં 334 મીટર જળસ્તર જળવાઈ રહ્યું.
-                  </div>
-                </div>
-                <div
-                  data-pencil-name="Pos રોજગાર"
-                  className="box-border [flex:1_1_0] h-fit flex flex-col gap-[8px] p-[14px_0px_0px_0px] justify-start items-start"
-                >
-                  <div
-                    data-pencil-name="Top Row"
-                    className="box-border w-fit h-fit shrink-0 flex flex-row gap-[8px] justify-start items-center"
-                  >
-                    <div
-                      data-pencil-name="Number"
-                      className="text-[24px]/[normal] box-border text-[#E67E22] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left [white-space:nowrap]"
-                    >
-                      ૦૨
-                    </div>
-                    <div
-                      data-pencil-name="Tag"
-                      className="text-[11px]/[normal] box-border text-[#2C2C2C] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-bold tracking-[0.1px] text-left [white-space:nowrap]"
-                    >
-                      રોજગાર
-                    </div>
-                  </div>
-                  <div
-                    data-pencil-name="Title"
-                    className="text-[20px]/[24px] box-border w-full text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left"
-                  >
-                    iCreate કૌશલ્ય કેન્દ્રો
-                  </div>
-                  <div
-                    data-pencil-name="Body"
-                    className="text-[14px]/[22px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left"
-                  >
-                    18,400 યુવાનોને રોજગારી; સરેરાશ ₹3.2 LPA પગાર. 41% પ્રથમ પેઢીના નોકરિયાત અને 38%
-                    મહિલા લાભાર્થી.
-                  </div>
-                </div>
-                <div
-                  data-pencil-name="Pos કૃષિ"
-                  className="box-border [flex:1_1_0] h-fit flex flex-col gap-[8px] p-[14px_0px_0px_0px] justify-start items-start"
-                >
-                  <div
-                    data-pencil-name="Top Row"
-                    className="box-border w-fit h-fit shrink-0 flex flex-row gap-[8px] justify-start items-center"
-                  >
-                    <div
-                      data-pencil-name="Number"
-                      className="text-[24px]/[normal] box-border text-[#E67E22] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left [white-space:nowrap]"
-                    >
-                      ૦૩
-                    </div>
-                    <div
-                      data-pencil-name="Tag"
-                      className="text-[11px]/[normal] box-border text-[#2C2C2C] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-bold tracking-[0.1px] text-left [white-space:nowrap]"
-                    >
-                      કૃષિ
-                    </div>
-                  </div>
-                  <div
-                    data-pencil-name="Title"
-                    className="text-[20px]/[24px] box-border w-full text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left"
-                  >
-                    ખરીફ વાવણી 84 લાખ હેક્ટરને પાર
-                  </div>
-                  <div
-                    data-pencil-name="Body"
-                    className="text-[14px]/[22px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left"
-                  >
-                    84 લાખ હેક્ટરમાં વાવણી; ગત વર્ષ કરતાં 11% વધુ. ₹12,400 કરોડ સબસિડી વિતરણ થઈ ચૂક્યું.
-                  </div>
-                </div>
-                <div
-                  data-pencil-name="Pos શાસન"
-                  className="box-border [flex:1_1_0] h-fit flex flex-col gap-[8px] p-[14px_0px_0px_0px] justify-start items-start"
-                >
-                  <div
-                    data-pencil-name="Top Row"
-                    className="box-border w-fit h-fit shrink-0 flex flex-row gap-[8px] justify-start items-center"
-                  >
-                    <div
-                      data-pencil-name="Number"
-                      className="text-[24px]/[normal] box-border text-[#E67E22] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left [white-space:nowrap]"
-                    >
-                      ૦૪
-                    </div>
-                    <div
-                      data-pencil-name="Tag"
-                      className="text-[11px]/[normal] box-border text-[#2C2C2C] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-bold tracking-[0.1px] text-left [white-space:nowrap]"
-                    >
-                      શાસન
-                    </div>
-                  </div>
-                  <div
-                    data-pencil-name="Title"
-                    className="text-[20px]/[24px] box-border w-full text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left"
-                  >
-                    રૂરબન મિશન 187 ક્લસ્ટર
-                  </div>
-                  <div
-                    data-pencil-name="Body"
-                    className="text-[14px]/[22px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left"
-                  >
-                    22 લાખ ગ્રામીણ રહેવાસીઓને સ્વચ્છ પાણીની સુવિધા. 2,347 કિમી નવા ગ્રામીણ માર્ગો
-                    બંધાયા.
-                  </div>
-                </div>
+                  </>
+                ))}
               </div>
+              {/* positive news end */}
             </div>
             <div
               data-pencil-name="Footer 2"

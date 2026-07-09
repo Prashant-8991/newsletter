@@ -28,15 +28,18 @@ export async function generatePdf({ baseUrl, payload = {} }) {
 
     const injectedKpi = JSON.stringify(payload.kpiData ?? null)
     const injectedNews = JSON.stringify(payload.newsData ?? null)
+    const injectedRtpms = JSON.stringify(payload.rtpmsData ?? null)
 
     await page.addInitScript(
-      ({ kpiData, newsData }) => {
+      ({ kpiData, newsData, rtpmsData }) => {
         window.__injectedKpiData = JSON.parse(kpiData)
         window.__injectedNewsData = JSON.parse(newsData)
+        window.__injectedRtpmsData = JSON.parse(rtpmsData)
         window.__kpiLoaded = true
         window.__newsLoaded = true
+        window.__rtpmsLoaded = true
       },
-      { kpiData: injectedKpi, newsData: injectedNews }
+      { kpiData: injectedKpi, newsData: injectedNews, rtpmsData: injectedRtpms }
     )
 
     await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 60000 })
