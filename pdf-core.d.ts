@@ -4,7 +4,9 @@ export interface PdfPayload {
   kpiData?: unknown
   newsData?: unknown
   rtpmsData?: unknown
+  budgetData?: unknown
   edits?: Record<string, string>
+  contentHTML?: string
 }
 
 export interface GeneratePdfOptions {

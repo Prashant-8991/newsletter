@@ -107,7 +107,7 @@ const App = () => {
   });
 
   const [budgetresult, setbudgetResult] = useState<BudgetResponseInterface[]>(() => {
-    const injected = (window as { __injectedRtpmsData?: unknown }).__injectedRtpmsData;
+    const injected = (window as { __injectedBudgetData?: unknown }).__injectedBudgetData;
     return Array.isArray(injected) ? (injected as BudgetResponseInterface[]) : [];
   });
 
@@ -269,10 +269,12 @@ const App = () => {
       __injectedNewsData?: unknown;
       __injectedAlertData?: unknown;
       __injectedRtpmsData?: unknown;
+      __injectedBudgetData?: unknown;
       __kpiLoaded?: boolean;
       __newsLoaded?: boolean;
       __alertLoaded?: boolean;
       __rtpmsLoaded?: boolean;
+      __budgetLoaded?: boolean;
     };
 
     // KPI
@@ -388,6 +390,32 @@ const App = () => {
       w.__rtpmsLoaded = true;
     } else {
       fetch(
+        `https://swar-api.gujarat.gov.in/newsletter-api/rtpms?date=${today}&limit=50&offset=0`
+      )
+        .then((res) => res.json())
+        .then((data) => {
+          console.log("rtpms data:", data);
+
+          const rtpms = Array.isArray(data)
+            ? data
+            : Array.isArray(data?.data)
+              ? data.data
+              : [];
+
+          setrtpmsResult(rtpms);
+          w.__rtpmsLoaded = true;
+        })
+        .catch((err) => {
+          console.error("rtpms fetch error:", err);
+          w.__rtpmsLoaded = true;
+        });
+    }
+
+    // budget
+    if (Array.isArray(w.__injectedBudgetData)) {
+      w.__budgetLoaded = true;
+    } else {
+      fetch(
         `https://swar-api.gujarat.gov.in/newsletter-api/budget?date=${today}&limit=50&offset=0`
       )
         .then((res) => res.json())
@@ -401,11 +429,11 @@ const App = () => {
               : [];
 
           setbudgetResult(budget);
-          w.__rtpmsLoaded = true;
+          w.__budgetLoaded = true;
         })
         .catch((err) => {
-          console.error("rtpms fetch error:", err);
-          w.__rtpmsLoaded = true;
+          console.error("budget fetch error:", err);
+          w.__budgetLoaded = true;
         });
     }
   }, []);
@@ -430,6 +458,20 @@ const App = () => {
     return Array.from(map.values()).slice(0, 3);
   }, [rtpmsresult]);
 
+  const primaryBudget = useMemo(() => budgetresult[0], [budgetresult]);
+  const budgetPercent = primaryBudget?.data?.grant_percentage;
+  const budgetPrabhag = primaryBudget?.prabhag_name ?? primaryBudget?.data?.prabhag_name ?? "";
+  const budgetTotal = primaryBudget?.data?.total_budget;
+  const budgetGrant = primaryBudget?.data?.total_grant;
+  const kpiPercentText = typeof budgetPercent === "number" ? `${budgetPercent.toFixed(2)}%` : "94.2%";
+  const kpiSubHeaderText = budgetPrabhag || "મૂડીખર્ચ સિદ્ધિ";
+  const m1Text = typeof budgetTotal === "number"
+    ? `બજેટ ફાળવણી: ${budgetTotal.toLocaleString("en-IN")} કરોડ`
+    : "બજેટ ફાળવણી: N/A";
+  const m2Text = typeof budgetGrant === "number"
+    ? `કરાયેલ ગ્રાન્ટ: ${budgetGrant.toLocaleString("en-IN")} કરોડ`
+    : "કરાયેલ ગ્રાન્ટ: N/A";
+
   return (
     <>
       <button
@@ -448,6 +490,7 @@ const App = () => {
                 kpiData: state,
                 newsData: newsresult,
                 rtpmsData: rtpmsresult,
+                budgetData: budgetresult,
                 edits,
                 contentHTML,
                 date: today,
@@ -720,32 +763,37 @@ const App = () => {
                 ></div>
                 <div
                   data-pencil-name="KPI Row"
-                  className="box-border w-full h-fit shrink-0 flex flex-row gap-[5px] justify-start items-start"
+                  className="box-border w-full h-fit shrink-0 flex flex-col gap-[2px] justify-start items-start"
                 >
                   <div
-                    data-pencil-name="Number"
-                    className="text-[76px]/[normal] box-border text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-medium tracking-[-2px] text-left [white-space:nowrap]"
+                    data-pencil-name="Sub Header"
+                    data-edit-key="kpi-subheader"
+                    className="text-[14px]/[normal] box-border text-[#8A8A8A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-semibold tracking-[0.3px] text-left w-full min-w-0 break-words uppercase"
                   >
-                    94.2%
+                    {kpiSubHeaderText}
                   </div>
-                  <div
-                    data-pencil-name="Trend"
-                    className="text-[34px]/[normal] box-border text-[#E67E22] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-semibold text-left [white-space:nowrap]"
-                  >
-                    ▲
+                  <div className="box-border w-full h-fit shrink-0 flex flex-row gap-[5px] justify-start items-start">
+                    <div
+                      data-pencil-name="Number"
+                      data-edit-key="kpi-number"
+                      className="text-[64px]/[normal] box-border text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-medium tracking-[-2px] text-left [white-space:nowrap]"
+                    >
+                      {kpiPercentText}
+                    </div>
+                    <div
+                      data-pencil-name="Trend"
+                      className="text-[28px]/[normal] box-border text-[#E67E22] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-semibold text-left [white-space:nowrap]"
+                    >
+                      ▲
+                    </div>
                   </div>
                 </div>
                 <div
                   data-pencil-name="Description"
-                  className="text-[19px]/[normal] box-border text-[#2C2C2C] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-medium text-left w-full min-w-0 break-words"
+                  data-edit-key="kpi-description"
+                  className="text-[15px]/[normal] box-border text-[#2C2C2C] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-medium text-left w-full min-w-0 break-words"
                 >
-                  મૂડીખર્ચ સિદ્ધિ
-                </div>
-                <div
-                  data-pencil-name="Comparison"
-                  className="text-[16px]/[normal] box-border text-[#8A8A8A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left [white-space:nowrap]"
-                >
-                  લક્ષ્યાંક 87.4% સામે · Q1 FY 2026-27
+                  ગ્રાન્ટ ટકાવારી (કુલ ફાળવણી સામે)
                 </div>
                 <div
                   data-pencil-name="Divider"
@@ -753,25 +801,21 @@ const App = () => {
                 ></div>
                 <div
                   data-pencil-name="Micro Row"
-                  className="box-border w-full h-fit shrink-0 flex flex-row gap-[8px] p-[6px_0px_0px_0px] justify-between items-start"
+                  className="box-border w-full h-fit shrink-0 flex flex-col gap-[4px] p-[6px_0px_0px_0px] justify-start items-start"
                 >
                   <div
                     data-pencil-name="M1"
-                    className="text-[13px]/[normal] box-border text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left min-w-0 break-words"
+                    data-edit-key="kpi-m1"
+                    className="text-[12px]/[18px] box-border text-[#5A5A5A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-semibold text-left w-full min-w-0 break-words"
                   >
-                    ₹18,427 કરોડ
+                    {m1Text}
                   </div>
                   <div
                     data-pencil-name="M2"
-                    className="text-[13px]/[normal] box-border text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left min-w-0 break-words"
+                    data-edit-key="kpi-m2"
+                    className="text-[12px]/[18px] box-border text-[#5A5A5A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-semibold text-left w-full min-w-0 break-words"
                   >
-                    412 પ્રોજેક્ટ
-                  </div>
-                  <div
-                    data-pencil-name="M3"
-                    className="text-[13px]/[normal] box-border text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left min-w-0 break-words"
-                  >
-                    33 જિલ્લા
+                    {m2Text}
                   </div>
                 </div>
                 <div
