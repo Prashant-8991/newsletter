@@ -65,38 +65,26 @@ interface RtPmsInterface {
   created_at: string;
 }
 
-interface BudgetDataInterface {
-  id: string;
-  source: string;
-  Budper: number;
-  Grantper: number;
-  Prabhag_Name: string;
-  Prabhag_type: number;
-  Total_Bud_Amt: number;
-  Total_Exp_Amt: number;
-  Department_Eng: string;
-  Cap_Css_Bud_Amt: number;
-  Rev_Css_Bud_Amt: number;
-  Total_Grant_Amt: number;
-  Cap_Css_Grant_Amt: number;
-  Cap_State_Bud_Amt: number;
-  Cap_State_Exp_Amt: number;
-  Rev_Css_Grant_Amt: number;
-  Rev_State_Bud_Amt: number;
-  Rev_State_Exp_Amt: number;
-  Cap_State_Grant_Amt: number;
-  Rev_State_Grant_Amt: number;
-  Cap_CSS_Expenditure_Amt: number;
-  Rev_CSS_Expenditure_Amt: number;
+interface BudgetStateInterface {
+  total_budget: number;
+  total_grant: number;
+  grant_expenditure: number;
+  grant_expenditure_percentage: number;
+}
+
+interface BudgetBottomThreeInterface {
+  prabhag_name: string;
+  department_eng: string;
+  total_budget: number;
+  total_grant: number;
+  total_expenditure: number;
+  budget_percentage: number;
+  grant_percentage: number;
 }
 
 interface BudgetResponseInterface {
-  id: number;
-  source_id: string;
-  prabhag_name: string;
-  department_eng: string;
-  data: BudgetDataInterface;
-  created_at: string;
+  state: BudgetStateInterface;
+  bottom_three: BudgetBottomThreeInterface[];
 }
 
 
@@ -109,7 +97,11 @@ interface PragatiInterface {
   statement: string;
   statement_gujarati: string;
   created_at: string;
-}
+};
+
+
+
+
 
 const App = () => {
 
@@ -133,15 +125,24 @@ const App = () => {
     return Array.isArray(injected) ? (injected as RtPmsInterface[]) : [];
   });
 
-  const [budgetresult, setbudgetResult] = useState<BudgetResponseInterface[]>(() => {
+  const [budgetresult, setbudgetResult] = useState<BudgetResponseInterface | null>(() => {
     const injected = (window as { __injectedBudgetData?: unknown }).__injectedBudgetData;
-    return Array.isArray(injected) ? (injected as BudgetResponseInterface[]) : [];
+    if (injected && typeof injected === "object" && !Array.isArray(injected)) {
+      return injected as BudgetResponseInterface;
+    }
+    return null;
   });
 
   const [pragatiresult, setPragatiResult] = useState<PragatiInterface[]>(() => {
     const injected = (window as { __injectedBudgetData?: unknown }).__injectedBudgetData;
+    if (injected && typeof injected === "object" && !Array.isArray(injected)) {
+      const obj = injected as { bottom_three?: PragatiInterface[] };
+      return Array.isArray(obj.bottom_three) ? obj.bottom_three : [];
+    }
     return Array.isArray(injected) ? (injected as PragatiInterface[]) : [];
   });
+
+
 
   const today = useMemo(
     () => new Intl.DateTimeFormat('sv-SE').format(new Date()),
@@ -293,7 +294,6 @@ const App = () => {
   }, [edits]);
 
   const positive_news = newsresult.filter((value) => value.news_type == 'positive');
-  const negative_news = newsresult.filter((value) => value.news_type == 'negative');
   const focus_department = newsresult.filter((value) => value.news_type == 'focused department')
   focus_department.map((result) => {
     console.log("brijesh result = ", result);
@@ -447,23 +447,21 @@ const App = () => {
     // }
 
     // budget
-    if (Array.isArray(w.__injectedBudgetData)) {
+    if (w.__injectedBudgetData && !Array.isArray(w.__injectedBudgetData)) {
       w.__budgetLoaded = true;
     } else {
       fetch(
-        `https://swar-api.gujarat.gov.in/newsletter-api/budget?date=${today}&limit=50&offset=0`
+        `https://swar-api.gujarat.gov.in/newsletter-api/budget-mock?date=${today}&limit=50&offset=0`
       )
         .then((res) => res.json())
         .then((data) => {
           console.log("budget data:", data);
 
-          const budget = Array.isArray(data)
+          const budget = data && typeof data === "object" && !Array.isArray(data)
             ? data
-            : Array.isArray(data?.data)
-              ? data.data
-              : [];
+            : null;
 
-          setbudgetResult(budget);
+          setbudgetResult(budget as BudgetResponseInterface | null);
           w.__budgetLoaded = true;
         })
         .catch((err) => {
@@ -479,7 +477,7 @@ const App = () => {
       w.__budgetLoaded = true;
     } else {
       fetch(
-        `https://swar-api.gujarat.gov.in/newsletter-api/pragati?date=${customtoday}&limit=50&offset=0`
+        `https://swar-api.gujarat.gov.in/newsletter-api/pragati?date=${today}&limit=50&offset=0`
       )
         .then((res) => res.json())
         .then((data) => {
@@ -492,6 +490,34 @@ const App = () => {
               : [];
 
           setPragatiResult(pragati);
+          w.__budgetLoaded = true;
+        })
+        .catch((err) => {
+          console.error("budget fetch error:", err);
+          w.__budgetLoaded = true;
+        });
+    }
+
+
+
+    // mock project
+    if (Array.isArray(w.__injectedBudgetData)) {
+      w.__budgetLoaded = true;
+    } else {
+      fetch(
+        `https://swar-api.gujarat.gov.in/newsletter-api/budget-mock?date=${customtoday}&limit=50&offset=0`
+      )
+        .then((res) => res.json())
+        .then((data) => {
+          console.log("mock project:", data);
+
+          const pragati = Array.isArray(data)
+            ? data
+            : Array.isArray(data?.data)
+              ? data.data
+              : [];
+
+          setPragatiResult(pragati as PragatiInterface[]);
           w.__budgetLoaded = true;
         })
         .catch((err) => {
@@ -542,7 +568,7 @@ const App = () => {
   }, [alertresult]);
 
   const groupedFocusDept = useMemo(() => {
-    const map = new Map<string, { department: string; items: { id: number; headline: string; body: string }[] }>();
+    const map = new Map<string, { department: string; items: { id: number; headline: string; body: string; district: string }[] }>();
     for (const item of focus_department) {
       const dept = item.department || "અન્ય";
       const existing = map.get(dept);
@@ -550,6 +576,7 @@ const App = () => {
         id: item.id,
         headline: item.summary_headline || "",
         body: item.summary_body || "",
+        district: item.district || "",
       };
       if (existing) {
         existing.items.push(entry);
@@ -560,17 +587,18 @@ const App = () => {
     return Array.from(map.values()).slice(0, 3);
   }, [focus_department]);
 
-  const primaryBudget = useMemo(
-    () => (budgetresult.length > 0 ? budgetresult[budgetresult.length - 1] : undefined),
-    [budgetresult]
-  );
-  const budgetPercent = primaryBudget?.data?.Grantper;
-  const budgetDeptEng = primaryBudget?.data?.Department_Eng ?? "";
-  const budgetTotalBud = primaryBudget?.data?.Total_Bud_Amt;
-  const budgetTotalGrant = primaryBudget?.data?.Total_Grant_Amt;
-  const budgetTotalExp = primaryBudget?.data?.Total_Exp_Amt;
-  const kpiPercentText = typeof budgetPercent === "number" ? `${budgetPercent.toFixed(2)}%` : "94.2%";
-  const kpiDeptText = budgetDeptEng;
+  const primaryBudget = useMemo(() => {
+    if (!budgetresult) return undefined;
+    return {
+      ...budgetresult.state,
+      bottom_three: budgetresult.bottom_three,
+    };
+  }, [budgetresult]);
+  const budgetPercent = primaryBudget?.grant_expenditure_percentage;
+  const budgetTotalBud = primaryBudget?.total_budget;
+  const budgetTotalGrant = primaryBudget?.total_grant;
+  const budgetTotalExp = primaryBudget?.grant_expenditure;
+  const kpiPercentText = typeof budgetPercent === "number" ? `${budgetPercent.toFixed(2)}` : "94.2%";
   const m1Text = typeof budgetTotalBud === "number"
     ? `${budgetTotalBud.toLocaleString("en-IN")} (Cr)`
     : "N/A (Cr)";
@@ -866,14 +894,14 @@ const App = () => {
                   data-edit-key="kpi-department"
                   className="text-[14px]/[18px] box-border text-[#163B7A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-semibold text-left w-full min-w-0 break-words"
                 >
-                  {kpiDeptText}
+                  રાજ્યનું બજેટ
                 </div>
-                <div
+                {/* <div
                   data-pencil-name="Label"
                   className="text-[14px]/[normal] box-border text-[#E67E22] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-bold tracking-[0.1px] text-left [white-space:nowrap]"
                 >
                   સપ્તાહનું મુખ્ય સૂચક
-                </div>
+                </div> */}
                 <div
                   data-pencil-name="Rule"
                   className="box-border w-[129px] h-[2px] shrink-0 bg-[#E67E22]"
@@ -908,7 +936,7 @@ const App = () => {
                     data-edit-key="kpi-subheader"
                     className="mt-5 text-[14px]/[normal] box-border text-[#8A8A8A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-semibold tracking-[0.3px] text-left w-full min-w-0 break-words uppercase"
                   >
-                    ખર્ચ 
+                    ખર્ચ
                   </div>
                   <div className="box-border w-full h-fit shrink-0 flex flex-row gap-[5px] justify-between items-end">
                     <div className="flex flex-row gap-[5px] items-end">
@@ -917,9 +945,9 @@ const App = () => {
                         data-edit-key="kpi-number"
                         className="text-[54px]/[normal] box-border text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-medium tracking-[-2px] text-left [white-space:nowrap] "
                       >
-                        {kpiPercentText} <span className='text-[18px]'>{m3Text}</span>
+                        {kpiPercentText} <span className='text-3xl'>%</span> <span className='text-[18px]'>{m3Text}</span>
                       </div>
-                      
+
                     </div>
                     <div
                       data-pencil-name="M3"
@@ -947,111 +975,64 @@ const App = () => {
                   data-pencil-name="Caption"
                   className="text-[10px]/[normal] box-border text-[#8A8A8A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-normal tracking-[0.1px] text-left [white-space:nowrap]"
                 >
-                  સ્ત્રોત: નાણાં વિભાગ
+                  IFMS, નાણા વિભાગ
                 </div>
 
                 <div
                   data-pencil-name="Related Section"
                   className="box-border w-full h-fit shrink-0 flex flex-col gap-[4px] pt-[8px] border-t-[0.8px] border-t-[#2C2C2C] mt-[4px] justify-start items-start"
                 >
-                  <div
-                    data-pencil-name="Related Label"
-                    data-edit-key="kpi-related-label"
-                    className="text-[12px]/[normal] box-border text-[#2C2C2C] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-bold tracking-[0.1px] text-left w-full min-w-0 break-words"
-                  >
-                    સંબંધિત · સંક્ષેપમાં
-                  </div>
+                  {/* <div
+         data-pencil-name="Related Label"
+         data-edit-key="kpi-related-label"
+         className="text-[12px]/[normal] box-border text-[#B0271A] font-[\'Noto_Sans_Gujarati\',system-ui,sans-serif] font-bold tracking-[0.1px] text-left w-full min-w-0 break-words"
+       >
+         નબળું પ્રદર્શન · વિભાગો
+       </div> */}
                   <div
                     data-pencil-name="Related Row"
-                    className="box-border w-full flex flex-col gap-[6px] justify-start items-start"
+                    className="box-border w-full flex flex-col gap-[4px] justify-start items-start"
                   >
-                    {pragatiresult && pragatiresult.length > 0 ? (
-                      pragatiresult.slice(0, 3).map((item, idx) => (
+                    {budgetresult?.bottom_three && budgetresult.bottom_three.length > 0 ? (
+                      budgetresult.bottom_three.map((dept, idx) => (
                         <div
                           key={idx}
                           data-pencil-name={`Related Item ${idx}`}
-                          className="box-border w-full flex flex-col gap-[1px]"
+                          data-edit-key={`kpi-related-${idx}`}
+                          className="box-border w-full flex flex-col gap-[1px] mt-5 border-t-[0.5px] border-t-[#DADADA] pt-[2px]"
                         >
                           <div
                             data-pencil-name="Related Title"
                             data-edit-key={`kpi-related-title-${idx}`}
-                            className="text-[13px]/[16px] box-border text-[#163B7A]  font-bold text-left w-full min-w-0 break-words"
+                            className="text-[17px]/[15px] tracking-widest box-border text-[#163B7A] font-[\'Noto_Serif_Gujarati\',system-ui,sans-serif] font-bold text-left w-full min-w-0 break-words"
                           >
-                            {item.name_of_project}
+                            {dept.department_eng}
                           </div>
-                          <div
-                            data-pencil-name="Related Body"
-                            data-edit-key={`kpi-related-body-${idx}`}
-                            className="mt-2 text-[16px]/[16px] box-border text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left w-full min-w-0 break-words"
-                          >
-                            {item.statement_gujarati}
+                          <div className="grid grid-cols-2 gap-[2px] mt-[1px] font-[\'Noto_Serif_Gujarati\',system-ui,sans-serif]">
+                            <div className="text-[15px]/[13px] mt-2 text-[#5A5A5A]">
+                              <span>બજેટ: </span>
+                              <span className="font-bold">{dept.total_budget.toLocaleString("en-IN")} (Cr)</span>
+                            </div>
+                            <div className="text-[15px]/[13px] mt-2 text-[#5A5A5A]">
+                              <span>ગ્રાન્ટ: </span>
+                              <span className="font-bold">{dept.total_grant.toLocaleString("en-IN")} (Cr)</span>
+                            </div>
+                            <div className="text-[15px]/[13px] mt-2 text-[#5A5A5A]">
+                              <span>ખર્ચ: </span>
+                              <span className="font-bold">{dept.total_expenditure.toLocaleString("en-IN")} (Cr)</span>
+                            </div>
+                            <div className="text-[15px]/[13px] mt-2 text-[#5A5A5A]">
+                              <span>બજેટ %: </span>
+                              <span className="font-bold">{dept.budget_percentage.toFixed(2)}%</span>
+                            </div>
                           </div>
                         </div>
                       ))
                     ) : (
-                      <>
-                        <div
-                          data-pencil-name="Related Item 0"
-                          className="box-border w-full flex flex-col gap-[1px]"
-                        >
-                          <div
-                            data-pencil-name="Related Title"
-                            data-edit-key="kpi-related-title-0"
-                            className="text-[13px]/[16px] box-border text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold text-left w-full min-w-0 break-words"
-                          >
-                            TB દવાની અછત
-                          </div>
-                          <div
-                            data-pencil-name="Related Body"
-                            data-edit-key="kpi-related-body-0"
-                            className="text-[11px]/[16px] box-border text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left w-full min-w-0 break-words"
-                          >
-                            14 PHCમાં દર્દીઓ બાહ્ય ફાર્મસી તરફ.
-                          </div>
-                        </div>
-                        <div
-                          data-pencil-name="Related Item 1"
-                          className="box-border w-full flex flex-col gap-[1px]"
-                        >
-                          <div
-                            data-pencil-name="Related Title"
-                            data-edit-key="kpi-related-title-1"
-                            className="text-[13px]/[16px] box-border text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold text-left w-full min-w-0 break-words"
-                          >
-                            મધ્યાહન ભોજન ઓડિટ
-                          </div>
-                          <div
-                            data-pencil-name="Related Body"
-                            data-edit-key="kpi-related-body-1"
-                            className="text-[11px]/[16px] box-border text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left w-full min-w-0 break-words"
-                          >
-                            દાહોદ-છોટા ઉદેપુરમાં 23% નમૂના નબળા.
-                          </div>
-                        </div>
-                        <div
-                          data-pencil-name="Related Item 2"
-                          className="box-border w-full flex flex-col gap-[1px]"
-                        >
-                          <div
-                            data-pencil-name="Related Title"
-                            data-edit-key="kpi-related-title-2"
-                            className="text-[13px]/[16px] box-border text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold text-left w-full min-w-0 break-words"
-                          >
-                            MSME પાવર કટ
-                          </div>
-                          <div
-                            data-pencil-name="Related Body"
-                            data-edit-key="kpi-related-body-2"
-                            className="text-[11px]/[16px] box-border text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left w-full min-w-0 break-words"
-                          >
-                            દૈનિક 6 કલાક પાવર કટ; ઉત્પાદન પ્રભાવિત.
-                          </div>
-                        </div>
-                      </>
+                      <div className="text-[10px]/[14px] text-[#8A8A8A] italic">ડેટા લોડ થઈ રહ્યું છે...</div>
                     )}
                   </div>
-                </div>
-              </div>
+                </div>              </div>
             </div>
             <div
               data-pencil-name="Focus District News"
@@ -1059,7 +1040,7 @@ const App = () => {
             >
               <div
                 data-pencil-name="Label"
-                className="mt-5 text-[15px]/[normal] box-border text-[#163B7A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-bold tracking-[0.1px] text-left [white-space:nowrap]"
+                className="mt-2 text-[15px]/[normal] box-border text-[#163B7A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-bold tracking-[0.1px] text-left [white-space:nowrap]"
               >
                 સૌથી ખરાબ પ્રદર્શન · વિભાગો
               </div>
@@ -1209,22 +1190,45 @@ const App = () => {
                       data-pencil-name="Rule"
                       className="box-border w-[211px] h-[3px] shrink-0 bg-[#B0271A]"
                     ></div>
-                    <div
+                    {/* <div
                       data-pencil-name="Title"
                       className="text-[24px]/[normal] box-border text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-medium text-left [white-space:nowrap]"
                     >
                       લક્ષ્યાંકથી નીચેના વિભાગો
-                    </div>
-                    {/* <div
-                      data-pencil-name="Subtitle"
-                      className="text-[14px]/[21px] box-border text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left [white-space:nowrap]"
-                    >
-                      Q1 FY ૨૦૨૬-૨૭ · ૨૨ વિભાગોમાંથી ૮ ધ્યાન આપવાલાયક
                     </div> */}
+                    {pragatiresult &&
+                      pragatiresult.length > 0 &&
+                      pragatiresult.slice(0, 3).map((item, idx) => (
+                        <div
+                          key={item.id || idx}
+                          data-pencil-name={`Related Item ${idx}`}
+                          className="box-border w-full h-fit shrink-0 flex flex-row gap-[16px] justify-start items-start"
+                        >
+                          <div
+                            data-pencil-name="Lead Column"
+                            className="box-border flex-1 min-w-0 h-fit flex flex-col gap-[6px] justify-start items-start"
+                          >
+                            {/* Headline */}
+                            <div
+                              data-pencil-name="Related Title"
+                              data-edit-key={`kpi-related-title-${idx}`}
+                              className="w-full text-[16px]/[22px] text-[#163B7A] font-bold text-left break-words"
+                            >
+                              {item.name_of_project}
+                            </div>
+
+                            {/* Body */}
+                            <div
+                              data-pencil-name="Related Body"
+                              data-edit-key={`kpi-related-body-${idx}`}
+                              className="w-full text-[17px]/[22px] text-[#5A5A5A] text-left break-words font-['Noto_Sans_Gujarati',system-ui,sans-serif]"
+                            >
+                              {item.statement_gujarati}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                   </div>
-
-
-
 
                   {/* alerts here */}
 
@@ -1290,27 +1294,21 @@ const App = () => {
                       data-pencil-name="Rule"
                       className="box-border w-[303px] h-[3px] shrink-0 bg-[#163B7A]"
                     ></div>
-                    {/* <div
-                      data-pencil-name="Title"
-                      className="text-[24px]/[normal] box-border text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-medium text-left [white-space:nowrap]"
-                    >
-                      આયુષ્માન ભારત: 2.14 Cr લાભાર્થી
-                    </div> */}
                   </div>
                   {groupedFocusDept.map((group) => (
                     <div
                       key={group.department}
                       data-pencil-name={`FocusDept ${group.department}`}
-                      className="box-border w-full shrink-0 flex flex-col gap-[4px] pt-[6px] border-t-[0.5px] border-t-[#DADADA]"
+                      className="box-border w-full shrink-0 flex flex-col gap-[3px] pt-[4px] border-t-[0.5px] border-t-[#DADADA]"
                     >
                       <div
                         data-pencil-name="Dept Name"
                         data-edit-key={`fdept-name-${group.department}`}
-                        className="text-[15px]/[18px] box-border text-[#163B7A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-bold text-left w-full min-w-0 break-words"
+                        className="text-[20px]/[18px] mb-5 box-border text-[#163B7A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-bold text-left w-full min-w-0 break-words"
                       >
                         {group.department}
                       </div>
-                      <div className="flex flex-col gap-[6px] w-full">
+                      <div className="flex flex-col gap-[4px] w-full">
                         {group.items.map((item, idx) => (
                           <div
                             key={item.id || idx}
@@ -1320,13 +1318,18 @@ const App = () => {
                           >
                             <div className="flex gap-[4px]">
                               <span className="text-[#E67E22] font-bold shrink-0">▸</span>
-                              <span className="text-[14px]/[18px] text-[#E67E22] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-bold text-left break-words">
+                              <span className="text-[20px]/[17px] text-[#E67E22] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-bold text-left break-words">
                                 {item.headline}
                               </span>
                             </div>
-                            <div className="text-[12px]/[18px] text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left break-words pl-[14px]">
+                            <div className="text-[14px]/[16px] mt-5 text-[#5A5A5A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-normal text-left break-words pl-[14px]">
                               {item.body}
                             </div>
+                            {item.district && (
+                              <div className="text-[13px]/[14px] mb-3 text-[#8A8A8A] pl-[14px]">
+                                {item.district}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -1364,56 +1367,47 @@ const App = () => {
                   className="box-border w-full h-[2px] shrink-0 bg-[#B0271A]"
                 ></div>
                 <div className="flex flex-col gap-[16px] w-full [flex:1_1_0] overflow-hidden">
-                  {
-                    negative_news.slice(0, 3)?.map((result) => (
+                  {newsresult.slice(0, 3).map((result) => (
+                    <div
+                      key={result.id}
+                      data-pencil-name="FeatureBody"
+                      className="box-border w-full h-fit shrink-0 flex flex-row gap-[16px] justify-start items-start"
+                    >
                       <div
-                        key={result.id}
-                        data-pencil-name="FeatureBody"
-                        className="box-border w-full h-fit shrink-0 flex flex-row gap-[16px] justify-start items-start"
+                        data-pencil-name="Lead Column"
+                        className="box-border [flex:1_1_0] min-w-0 h-fit flex flex-col gap-[6px] justify-start items-start"
                       >
                         <div
-                          data-pencil-name="Lead Column"
-                          className="box-border [flex:1_1_0] min-w-0 h-fit flex flex-col gap-[6px] justify-start items-start"
+                          data-pencil-name="Kicker"
+                          data-edit-key="neg-kicker-"
+                          className="text-[11px]/[normal] text-[#5A5A5A] text-left min-w-0 break-words w-full"
                         >
-                          <div
-                            data-pencil-name="Kicker"
-                            data-edit-key={`neg-kicker-${result.id}`}
-                            className="text-[11px]/[normal] text-[#5A5A5A]  text-left min-w-0 break-words w-full font-['Noto_Serif_Gujarati',system-ui,sans-serif]"
-                          >
-                            {result.article_category}
-                          </div>
-
-                          <div
-                            data-pencil-name="Headline"
-                            data-edit-key={`neg-headline-${result.id}`}
-                            className="text-[16px]/[22px] w-full text-[#163B7A] font-extrabold text-left min-w-0 break-words font-['Noto_Serif_Gujarati',system-ui,sans-serif]"
-                          >
-                            {result.summary_headline}
-                          </div>
-
-                          <div
-                            data-pencil-name="Byline"
-                            data-edit-key={`neg-byline-${result.id}`}
-                            className="text-[11px]/[normal] text-[#8A8A8A] text-left min-w-0 break-words w-full font-['Noto_Serif_Gujarati',system-ui,sans-serif]"
-                          >
-                            {result.district}
-                            {result.department !== "N/A"}
-                          </div>
-
-                          <div
-                            data-pencil-name="Body"
-                            data-edit-key={`neg-body-${result.id}`}
-                            className="text-[14px]/[22px] w-full text-[#5A5A5A] text-left min-w-0 break-words"
-                          >
-                            {result.summary_body}
-                          </div>
+                          {result.article_category}
+                        </div>
+                        <div
+                          data-pencil-name="Headline"
+                          data-edit-key="neg-headline-"
+                          className="text-[16px]/[22px] w-full text-[#163B7A] font-extrabold text-left min-w-0 break-words"
+                        >
+                          {result.summary_headline}
+                        </div>
+                        <div
+                          data-pencil-name="Byline"
+                          data-edit-key="neg-byline-"
+                          className="text-[11px]/[normal] text-[#8A8A8A] text-left min-w-0 break-words w-full"
+                        >
+                          {result.district}
+                        </div>
+                        <div
+                          data-pencil-name="Body"
+                          data-edit-key="neg-body-"
+                          className="text-[14px]/[22px] w-full text-[#5A5A5A] text-left min-w-0 break-words"
+                        >
+                          {result.summary_body}
                         </div>
                       </div>
-                    ))
-                  }
-                  {newsresult.length === 0 && (
-                    <div className="text-[14px]/[22px] text-[#8A8A8A] text-left">કોઈ નકારાત્મક અહેવાલ ઉપલબ્ધ નથી</div>
-                  )}
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -1442,7 +1436,6 @@ const App = () => {
                   સમાપન · અઠવાડિયું ૨૭, ૨૦૨૬
                 </div>
               </div>
-              {/* positive news start */}
               <div
                 data-pencil-name="Header Rule"
                 className="box-border w-full h-[3px] shrink-0 bg-[#E67E22]"
@@ -1451,50 +1444,48 @@ const App = () => {
                 data-pencil-name="Positive Row"
                 className="box-border w-full h-fit shrink-0 flex flex-row gap-[28px] justify-start items-start"
               >
-                {positive_news && positive_news.map((result, index) => (
-                  <>
+                {positive_news && positive_news.slice(0, 4).map((result, index) => (
+                  <div
+                    key={index}
+                    data-pencil-name={`Pos માળખાગત`}
+                    className="box-border [flex:1_1_0] h-fit flex flex-col gap-[8px] p-[14px_0px_0px_0px] justify-start items-start"
+                  >
                     <div
-                      data-pencil-name="Pos માળખાગત"
-                      className="box-border [flex:1_1_0] h-fit flex flex-col gap-[8px] p-[14px_0px_0px_0px] justify-start items-start"
+                      data-pencil-name="Top Row"
+                      className="box-border w-fit h-fit shrink-0 flex flex-row gap-[8px] justify-start items-center"
                     >
                       <div
-                        data-pencil-name="Top Row"
-                        className="box-border w-fit h-fit shrink-0 flex flex-row gap-[8px] justify-start items-center"
+                        data-pencil-name="Number"
+                        data-edit-key={`pos-number-${result.id}`}
+                        className="text-[24px]/[normal] box-border text-[#E67E22] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left"
                       >
-                        <div
-                          data-pencil-name="Number"
-                          data-edit-key={`pos-number-${result.id}`}
-                          className="text-[24px]/[normal] box-border text-[#E67E22] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left"
-                        >
-                          {index + 1}
-                        </div>
-                        <div
-                          data-pencil-name="Tag"
-                          data-edit-key={`pos-tag-${result.id}`}
-                          className="text-[11px]/[normal] box-border text-[#163B7A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-bold tracking-[0.1px] text-left"
-                        >
-                          {result.department}
-                        </div>
+                        {index + 1}
                       </div>
                       <div
-                        data-pencil-name="Title"
-                        data-edit-key={`pos-title-${result.id}`}
-                        className="text-[20px]/[24px] box-border w-full text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left break-words"
+                        data-pencil-name="Tag"
+                        data-edit-key={`pos-tag-${result.id}`}
+                        className="text-[11px]/[normal] box-border text-[#163B7A] font-['Noto_Sans_Gujarati',system-ui,sans-serif] font-bold tracking-[0.1px] text-left"
                       >
-                        {result.summary_headline}
-                      </div>
-                      <div
-                        data-pencil-name="Body"
-                        data-edit-key={`pos-body-${result.id}`}
-                        className="text-[14px]/[22px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left break-words"
-                      >
-                        {result.summary_body}
+                        {result.department}
                       </div>
                     </div>
-                  </>
+                    <div
+                      data-pencil-name="Title"
+                      data-edit-key={`pos-title-${result.id}`}
+                      className="text-[20px]/[24px] box-border w-full text-[#163B7A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-semibold text-left break-words"
+                    >
+                      {result.summary_headline}
+                    </div>
+                    <div
+                      data-pencil-name="Body"
+                      data-edit-key={`pos-body-${result.id}`}
+                      className="text-[14px]/[22px] box-border w-full text-[#5A5A5A] font-['Noto_Serif_Gujarati',system-ui,sans-serif] font-normal text-left break-words"
+                    >
+                      {result.summary_body}
+                    </div>
+                  </div>
                 ))}
               </div>
-              {/* positive news end */}
             </div>
             <div
               data-pencil-name="Footer 2"
